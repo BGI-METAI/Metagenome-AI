@@ -10,27 +10,38 @@ class Embedding(ABC):
 
 
 class EsmEmbedding(Embedding):
-    def get_embedding(self, data=[]):
+    def __init__(self):
         model, alphabet = torch.hub.load(
-            "facebookresearch/esm:main", "esm2_t30_150M_UR50D"
+            "facebookresearch/esm:main", "esm2_t12_35M_UR50D"
         )
-        model.contact_head = Identity()
-        model.emb_layer_norm_after = Identity()
-        model.lm_head = Identity()
-        model.eval()
-        batch_converter = alphabet.get_batch_converter()
-        # make data as input
-        data = [
-            (
-                "protein1",
-                "MKTVRQERLKSIVRILERSKEPVSGAQLAEELSVSRQVIVQDIAYLRSLGYNIVATPRGYVLAGG",
-            ),
-            (
-                "protein2",
-                "MKTVRQERLKSIVRILERSKEPVSGAQLAEELSVSRQVIVQDIAYLRSLGYNIVATPRGYVLAGG",
-            ),
-        ]
-        batch_labels, batch_strs, batch_tokens = batch_converter(data)
+        self.model = model
+        self.model.contact_head = Identity()
+        self.model.emb_layer_norm_after = Identity()
+        self.model.lm_head = Identity()
+        self.model.eval()
+        self.batch_converter = alphabet.get_batch_converter()
+
+    def get_embedding(self, batch, pooling='cls'):
+        data = [(fam, seq) for fam, seq in zip(batch["family"], batch["sequence"])]
+        _, _, batch_tokens = self.batch_converter(data)
         with torch.no_grad():
-            res = model(batch_tokens)
+            res = self.model(batch_tokens)
+        # perform min max mean pool
+        # Approach 1: Mean Pooling
+        # pooled_encoder_output = torch.mean(enc_output, dim=1)
+        # Approach 2: Using [CLS] 0th index
+        # The first token of every sequence is always a special classification token ([CLS]).
+        # The final hidden state corresponding to this token is used as the aggregate sequence representation
+        # for classification tasks.
+        if pooling == 'cls':
+            res = res['logits'][:, 0, :]
+        elif pooling == 'mean':
+            pass
+        elif pooling == 'max':
+            pass
+        else:
+            raise NotImplementedError()
         return res
+
+    def to(self, device):
+        self.model.to(device)
