@@ -45,17 +45,24 @@ from config import get_config
 
 
 class Classifier(nn.Module):
-    def __init__(self, d_model, hidden_size, num_classes):
+    def __init__(self, d_model, num_classes, hidden_sizes=None):
         super().__init__()
-        self.d_model = d_model
-        self.model = nn.Sequential(
-            nn.Linear(d_model, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, num_classes),
-        )
+        if hidden_sizes is None:
+            # Single fully connected layer for classification head
+            self.classifier = nn.Sequential(nn.Linear(d_model, num_classes))
+        # Multiple hidden layers followed by a linear layer for classification head
+        else:
+            layers = []
+            prev_size = d_model
+            for hidden_size in hidden_sizes:
+                layers.append(nn.Linear(prev_size, hidden_size))
+                layers.append(nn.ReLU())
+                prev_size = hidden_size
+            layers.append(nn.Linear(prev_size, num_classes))
+            self.classifier = nn.Sequential(*layers)
 
     def forward(self, x):
-        return self.model(x)
+        return self.classifier(x)
 
 
 def get_all_sentences(ds, lang):
@@ -142,7 +149,14 @@ def train_model(config):
     # Fine-tune the classifier using the embeddings to predict protein families
     d_model = config["d_model"]
     num_classes = len(le.classes_)
-    classifier = Classifier(d_model, int((d_model + num_classes) / 2), num_classes)
+    # classifier = Classifier(d_model, num_classes, [int((d_model + num_classes) / 2)])
+    # Embedding layers transform the original data (AA sequence) into some semantic-aware
+    # vector spaces. This is where all the architecture designs come in (e.g. attention, cnn, lstm etc.),
+    # which are all far more superior than a simple FC for their chosen tasks. So if you have the capacity
+    # of adding multiple FCs, why not just add another attention block? On the other hand, the embeddings 
+    # from a decent model should have large inter-class distance and small intra-class variance, which could
+    #  easily be projected to their corresponding classes in a linear fashion, and a FC is more than enough.
+    classifier = Classifier(d_model, num_classes)
 
     initial_epoch = 0
     optimizer = torch.optim.Adam(classifier.parameters(), lr=config["lr"], eps=1e-9)
