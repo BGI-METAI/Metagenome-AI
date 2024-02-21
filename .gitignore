@@ -150,6 +150,8 @@ weights/
 tokenizer_*.json
 loss*
 score*
+*.pt
+*.csv
 
 # Pyre type checker
 .pyre/
