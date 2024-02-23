@@ -8,6 +8,14 @@ class Embedding(ABC):
     def get_embedding(self):
         raise NotImplementedError()
 
+    @abstractmethod
+    def get_embedding_dim(self):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def to(self):
+        raise NotImplementedError()
+
 
 class EsmEmbedding(Embedding):
     def __init__(self):
@@ -45,3 +53,6 @@ class EsmEmbedding(Embedding):
 
     def to(self, device):
         self.model.to(device)
+
+    def get_embedding_dim(self):
+        return 480
