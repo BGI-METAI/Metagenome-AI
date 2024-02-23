@@ -147,13 +147,15 @@ def train_model(config):
     f1_list = []
 
     # Fine-tune the classifier using the embeddings to predict protein families
-    d_model = config["d_model"]
+    # d_model = config["d_model"]
+    # Each model should return its embedding dimension
+    d_model = model.get_embedding_dim()
     num_classes = len(le.classes_)
     # classifier = Classifier(d_model, num_classes, [int((d_model + num_classes) / 2)])
     # Embedding layers transform the original data (AA sequence) into some semantic-aware
     # vector spaces. This is where all the architecture designs come in (e.g. attention, cnn, lstm etc.),
     # which are all far more superior than a simple FC for their chosen tasks. So if you have the capacity
-    # of adding multiple FCs, why not just add another attention block? On the other hand, the embeddings 
+    # of adding multiple FCs, why not just add another attention block? On the other hand, the embeddings
     # from a decent model should have large inter-class distance and small intra-class variance, which could
     #  easily be projected to their corresponding classes in a linear fashion, and a FC is more than enough.
     classifier = Classifier(d_model, num_classes)
