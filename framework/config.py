@@ -5,7 +5,7 @@ def get_config():
     return {
         "input": "../transformer/pfam_tiny_1579.train.csv",
         "batch_size": 16,
-        "num_epochs": 10,
+        "num_epochs": 2,
         "d_model": 480,
         "lr": 1e-4,
         "emb_type": "ESM",
