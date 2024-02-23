@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 from embedding import EsmEmbedding
 from dataset import CustomDataset
-from config import get_config
+from config import get_config, get_weights_file_path
 
 # os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "caching_allocator"
 
@@ -169,7 +169,7 @@ def train_model(config):
         train_loss = 0
         classifier.train()
         for batch in batch_iterator:
-            embedding = model.get_embedding(batch)
+            embedding = model.get_embedding(batch, pooling='mean')
 
             classifier_output = classifier(embedding)
             target = batch["family"].to(rank)
