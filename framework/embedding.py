@@ -9,7 +9,7 @@ class Embedding(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_embedding_dim(self):
+    def get_embedding_dim(self, batch=None, pooling="cls"):
         raise NotImplementedError()
 
     @abstractmethod
@@ -36,10 +36,6 @@ class EsmEmbedding(Embedding):
         with torch.no_grad():
             res = self.model(batch_tokens)
 
-        # perform min max mean pool
-        # Approach 1: Mean Pooling
-        # pooled_encoder_output = torch.mean(enc_output, dim=1)
-        # Approach 2: Using [CLS] 0th index
         # The first token of every sequence is always a special classification token ([CLS]).
         # The final hidden state corresponding to this token is used as the aggregate sequence representation
         # for classification tasks.
@@ -48,19 +44,19 @@ class EsmEmbedding(Embedding):
         elif pooling == "mean":
             seq_repr = []
             batch_lens = (batch_tokens != self.alphabet.padding_idx).sum(1)
-            
+
             for i, tokens_len in enumerate(batch_lens):
-                seq_repr.append(res["logits"][i, 1: tokens_len - 1].mean(0))
-            
-            seq_repr = torch.tensor(seq_repr)
+                seq_repr.append(res["logits"][i, 1 : tokens_len - 1].mean(0))
+
+            seq_repr = torch.vstack(seq_repr)
         elif pooling == "max":
             seq_repr = []
             batch_lens = (batch_tokens != self.alphabet.padding_idx).sum(1)
-            
+
             for i, tokens_len in enumerate(batch_lens):
-                seq_repr.append(res["logits"][i, 1: tokens_len - 1].max(0))
-            
-            seq_repr = torch.tensor(seq_repr)
+                seq_repr.append(res["logits"][i, 1 : tokens_len - 1].max(0))
+
+            seq_repr = torch.vstack(seq_repr)
         else:
             raise NotImplementedError()
         return seq_repr
