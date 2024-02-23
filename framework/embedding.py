@@ -23,17 +23,19 @@ class EsmEmbedding(Embedding):
             "facebookresearch/esm:main", "esm2_t12_35M_UR50D"
         )
         self.model = model
+        self.alphabet = alphabet
         self.model.contact_head = Identity()
         self.model.emb_layer_norm_after = Identity()
         self.model.lm_head = Identity()
         self.model.eval()
         self.batch_converter = alphabet.get_batch_converter()
 
-    def get_embedding(self, batch, pooling='cls'):
+    def get_embedding(self, batch, pooling="cls"):
         data = [(fam, seq) for fam, seq in zip(batch["family"], batch["sequence"])]
         _, _, batch_tokens = self.batch_converter(data)
         with torch.no_grad():
             res = self.model(batch_tokens)
+
         # perform min max mean pool
         # Approach 1: Mean Pooling
         # pooled_encoder_output = torch.mean(enc_output, dim=1)
@@ -41,15 +43,27 @@ class EsmEmbedding(Embedding):
         # The first token of every sequence is always a special classification token ([CLS]).
         # The final hidden state corresponding to this token is used as the aggregate sequence representation
         # for classification tasks.
-        if pooling == 'cls':
-            res = res['logits'][:, 0, :]
-        elif pooling == 'mean':
-            pass
-        elif pooling == 'max':
-            pass
+        if pooling == "cls":
+            seq_repr = res["logits"][:, 0, :]
+        elif pooling == "mean":
+            seq_repr = []
+            batch_lens = (batch_tokens != self.alphabet.padding_idx).sum(1)
+            
+            for i, tokens_len in enumerate(batch_lens):
+                seq_repr.append(res["logits"][i, 1: tokens_len - 1].mean(0))
+            
+            seq_repr = torch.tensor(seq_repr)
+        elif pooling == "max":
+            seq_repr = []
+            batch_lens = (batch_tokens != self.alphabet.padding_idx).sum(1)
+            
+            for i, tokens_len in enumerate(batch_lens):
+                seq_repr.append(res["logits"][i, 1: tokens_len - 1].max(0))
+            
+            seq_repr = torch.tensor(seq_repr)
         else:
             raise NotImplementedError()
-        return res
+        return seq_repr
 
     def to(self, device):
         self.model.to(device)
