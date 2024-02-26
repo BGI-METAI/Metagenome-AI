@@ -1,4 +1,4 @@
-import os
+import datetime
 import warnings
 from pathlib import Path
 
@@ -10,6 +10,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, f1_score
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils import data
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.tensorboard import SummaryWriter
@@ -45,6 +46,12 @@ from config import get_config, get_weights_file_path
 
 
 class Classifier(nn.Module):
+    """A classification head used to output protein family (or other targets) probabilities
+
+    Args:
+        nn (_type_): _description_
+    """
+
     def __init__(self, d_model, num_classes, hidden_sizes=None):
         super().__init__()
         if hidden_sizes is None:
@@ -89,21 +96,25 @@ def get_all_sentences(ds, lang):
 
 
 def get_ds(config):
-    ds_raw = pd.read_csv(config["input"])
-
+    train_ds_raw = pd.read_csv(config["train"])
     le = LabelEncoder()
-    le.fit(ds_raw["label"])
+    le.fit(train_ds_raw[config["label"]])
 
-    ds_raw["le_label"] = le.transform(ds_raw["label"])
-    ds_raw = datasets.Dataset(pa.Table.from_pandas(ds_raw))
+    train_ds_raw["le_" + config["label"]] = le.transform(train_ds_raw[config["label"]])
+    train_ds_raw = datasets.Dataset(pa.Table.from_pandas(train_ds_raw))
 
-    # Keep 90% training and 10% validation
-    train_ds_size = int(0.9 * len(ds_raw))
-    val_ds_size = len(ds_raw) - train_ds_size
-    train_ds_raw, val_ds_raw = data.random_split(ds_raw, [train_ds_size, val_ds_size])
+    if config["valid"] is not None:
+        val_ds_raw = pd.read_csv(config["valid"])
+    else:
+        # Keep 90% training and 10% validation
+        train_ds_size = int(0.9 * len(train_ds_raw))
+        val_ds_size = len(train_ds_raw) - train_ds_size
+        train_ds_raw, val_ds_raw = data.random_split(
+            train_ds_raw, [train_ds_size, val_ds_size]
+        )
 
-    train_ds = CustomDataset(train_ds_raw)
-    val_ds = CustomDataset(val_ds_raw)
+    train_ds = CustomDataset(train_ds_raw, config)
+    val_ds = CustomDataset(val_ds_raw, config)
 
     train_dataloader = data.DataLoader(
         train_ds,
@@ -145,7 +156,8 @@ def train_model(config):
     # model = DDP(model, device_ids=[rank])
 
     # model = DistributedDataParallel(model)
-    writer = SummaryWriter(config["experiment_name"])
+    timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+    writer = SummaryWriter(config["experiment_name"] + timestamp)
 
     initial_epoch = 0
     global_step = 0
@@ -155,8 +167,8 @@ def train_model(config):
         print(f"Preloading model: {model_filename}")
         state = torch.load(model_filename)
         initial_epoch = state["epoch"] + 1
-        optimizer.load_state_dict(state["optimizer_state_dict"])
         global_step = state["global_step"]
+        optimizer.load_state_dict(state["optimizer_state_dict"])
 
     loss_fn = nn.CrossEntropyLoss(label_smoothing=0.1).to(rank)
 
@@ -179,32 +191,36 @@ def train_model(config):
     #  easily be projected to their corresponding classes in a linear fashion, and a FC is more than enough.
     classifier = Classifier(d_model, num_classes)
 
-    initial_epoch = 0
     optimizer = torch.optim.Adam(classifier.parameters(), lr=config["lr"], eps=1e-9)
+    early_stopper = EarlyStopper(patience=5)
 
     # Training loop
     for epoch in range(config["num_epochs"]):
-        batch_iterator = tqdm(train_dataloader, desc=f"Processing epochs {epoch:02d}")
+        batch_iterator = tqdm(train_dataloader, desc=f"Processing epoch: {epoch:02d}")
         train_loss = 0
         classifier.train()
         for batch in batch_iterator:
-            embedding = model.get_embedding(batch, pooling='mean')
+            embedding = model.get_embedding(batch, pooling="mean")
 
             classifier_output = classifier(embedding)
-            target = batch["family"].to(rank)
+            target = batch[config["target"]].to(rank)
 
             loss = loss_fn(
                 classifier_output,
                 target,
             )
             train_loss += loss.item()
-            batch_iterator.set_postfix({f"cl_loss:": f"{loss.item():6.3f}"})
+            batch_iterator.set_postfix({f"Training loss:": f"{loss.item():6.3f}"})
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
 
         train_loss = train_loss / len(train_dataloader)
         train_loss_list.append(train_loss)
+
+        # Tensorboard
+        writer.add_scalar("Training loss", train_loss, global_step)
+        writer.flush()
 
         # Validation loop
         val_loss = 0
@@ -216,7 +232,7 @@ def train_model(config):
                 embedding = model.get_embedding(batch)
 
                 classifier_output = classifier(embedding)
-                target = batch["family"].to(rank)
+                target = batch[config["target"]].to(rank)
 
                 loss = loss_fn(
                     classifier_output,
@@ -239,6 +255,16 @@ def train_model(config):
         f1_list.append(f1)
         val_loss = val_loss / len(val_dataloader)
         val_loss_list.append(val_loss)
+
+        # Tensorboard
+        writer.add_scalar("Validation loss", val_loss, global_step)
+        writer.flush()
+
+        if early_stopper.early_stop(val_loss):
+            print("Early stopping...")
+            break
+
+        global_step += 1
     # Save model at the end of every epoch
     # model_filename = get_weights_file_path(config, f"fin")
     # torch.save(
@@ -250,6 +276,7 @@ def train_model(config):
     #     },
     #     model_filename,
     # )
+
     # Plot loss
     fig, ax = plt.subplots()
     ax.plot(val_loss_list, label="Validation")
