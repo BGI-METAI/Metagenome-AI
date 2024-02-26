@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import torch
 from torch.nn import Identity
+import esm
 
 
 class Embedding(ABC):
@@ -19,9 +20,12 @@ class Embedding(ABC):
 
 class EsmEmbedding(Embedding):
     def __init__(self):
-        model, alphabet = torch.hub.load(
-            "facebookresearch/esm:main", "esm2_t12_35M_UR50D"
-        )
+        # model, alphabet = torch.hub.load(
+        #     "facebookresearch/esm:main", "esm2_t12_35M_UR50D"
+        # )
+        # model, alphabet = esm.pretrained.esm2_t36_3B_UR50D()
+        model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
+        # model, alphabet = esm.pretrained.esm2_t12_35M_UR50D()
         self.model = model
         self.alphabet = alphabet
         self.model.contact_head = Identity()
@@ -29,6 +33,7 @@ class EsmEmbedding(Embedding):
         self.model.lm_head = Identity()
         self.model.eval()
         self.batch_converter = alphabet.get_batch_converter()
+        self.embed_dim = model.embed_dim
 
     def get_embedding(self, batch, pooling="cls"):
         data = [(fam, seq) for fam, seq in zip(batch["family"], batch["sequence"])]
@@ -65,4 +70,4 @@ class EsmEmbedding(Embedding):
         self.model.to(device)
 
     def get_embedding_dim(self):
-        return 480
+        return self.model.embed_dim
