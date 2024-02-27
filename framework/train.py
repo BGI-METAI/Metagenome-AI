@@ -10,9 +10,8 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, f1_score
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils import data
-from torch.optim.lr_scheduler import LambdaLR
+from torch.optim.lr_scheduler import StepLR, LinearLR
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
@@ -69,8 +68,7 @@ class Classifier(nn.Module):
             self.classifier = nn.Sequential(*layers)
 
     def forward(self, x):
-        x = self.classifier(x)
-        return F.softmax(x)
+        return self.classifier(x)
 
 
 class EarlyStopper:
@@ -189,9 +187,11 @@ def train_model(config):
     # of adding multiple FCs, why not just add another attention block? On the other hand, the embeddings
     # from a decent model should have large inter-class distance and small intra-class variance, which could
     #  easily be projected to their corresponding classes in a linear fashion, and a FC is more than enough.
-    classifier = Classifier(d_model, num_classes)
+    classifier = Classifier(d_model, num_classes).to(rank)
 
     optimizer = torch.optim.Adam(classifier.parameters(), lr=config["lr"], eps=1e-9)
+    scheduler = StepLR(optimizer, step_size=3, gamma=0.7)
+    # scheduler = LinearLR(optimizer, start_factor=1.0, end_factor=0.5, total_iters=5)
     early_stopper = EarlyStopper(patience=5)
 
     # Training loop
@@ -200,9 +200,11 @@ def train_model(config):
         train_loss = 0
         classifier.train()
         for batch in batch_iterator:
-            embedding = model.get_embedding(batch, pooling="mean")
+            optimizer.zero_grad()
 
+            embedding = model.get_embedding(batch, pooling="cls")
             classifier_output = classifier(embedding)
+
             target = batch[config["target"]].to(rank)
 
             loss = loss_fn(
@@ -211,9 +213,14 @@ def train_model(config):
             )
             train_loss += loss.item()
             batch_iterator.set_postfix({f"Training loss:": f"{loss.item():6.3f}"})
+
             loss.backward()
             optimizer.step()
-            optimizer.zero_grad()
+
+        # before_lr = optimizer.param_groups[0]["lr"]
+        scheduler.step()
+        # after_lr = optimizer.param_groups[0]["lr"]
+        # print("Epoch %d: Adam lr %.4f -> %.4f" % (epoch, before_lr, after_lr))
 
         train_loss = train_loss / len(train_dataloader)
         train_loss_list.append(train_loss)
@@ -255,6 +262,8 @@ def train_model(config):
         f1_list.append(f1)
         val_loss = val_loss / len(val_dataloader)
         val_loss_list.append(val_loss)
+
+        print(f"Accuracy: {acc:.2f} F1: {f1:.2f} Validation loss: {val_loss:.2f}")
 
         # Tensorboard
         writer.add_scalar("Validation loss", val_loss, global_step)
