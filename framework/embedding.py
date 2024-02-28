@@ -34,10 +34,15 @@ class EsmEmbedding(Embedding):
         self.model.eval()
         self.batch_converter = alphabet.get_batch_converter()
         self.embed_dim = model.embed_dim
+        # Freeze the parameters of ESM
+        for param in self.model.parameters():
+            param.requires_grad = False
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def get_embedding(self, batch, pooling="cls"):
         data = [(fam, seq) for fam, seq in zip(batch["family"], batch["sequence"])]
         _, _, batch_tokens = self.batch_converter(data)
+        batch_tokens = batch_tokens.to(self.device)
         with torch.no_grad():
             res = self.model(batch_tokens)
 
@@ -67,7 +72,7 @@ class EsmEmbedding(Embedding):
         return seq_repr
 
     def to(self, device):
-        self.model.to(device)
+        self.model = self.model.to(device)
 
     def get_embedding_dim(self):
         return self.model.embed_dim
