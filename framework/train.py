@@ -280,17 +280,18 @@ def train_model(config):
             break
 
         global_step += 1
-    # Save model at the end of every epoch
-    # model_filename = get_weights_file_path(config, f"fin")
-    # torch.save(
-    #     {
-    #         "epoch": 222,
-    #         "model_state_dict": model.module.state_dict(),
-    #         "optimizer_state_dict": optimizer.state_dict(),
-    #         "global_step": global_step,
-    #     },
-    #     model_filename,
-    # )
+
+        # Save model at the end of every epoch
+        model_filename = get_weights_file_path(config, f"{epoch:02d}")
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state_dict": classifier.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "global_step": global_step,
+            },
+            model_filename,
+        )
 
     # Plot loss
     classifier.eval()
