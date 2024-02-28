@@ -3,12 +3,13 @@ from pathlib import Path
 
 def get_config():
     return {
-        # "train": '/goofys/projects/MAI/data/brain-genomics-public/pfam.test.csv',
+        # "train": "/goofys/projects/MAI/data/brain-genomics-public/pfam.train.csv",
         "train": "../transformer/pfam_tiny_1579.train.csv",
         "valid": None,
+        # "valid": "/goofys/projects/MAI/data/brain-genomics-public/pfam.valid.csv",
         "test": None,
         "batch_size": 32,
-        "num_epochs": 7,
+        "num_epochs": 2,
         "lr": 1e-3,
         "emb_type": "ESM",
         "label": "label",
@@ -16,9 +17,10 @@ def get_config():
         "sequence": "original",
         "target": "family",
         "model_folder": "weights",
-        "model_basename": "tmodel_",
+        "model_basename": "model_",
         "preload": None,
         "experiment_name": "runs/esmSmall",
+        "tensorboard": False,
     }
 
 
