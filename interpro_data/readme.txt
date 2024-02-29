@@ -12,4 +12,4 @@ protein_seq_GENE3D.tsv contains interpro protein id, protein sequence length, se
 
 
 About protein GO terms:
-protein_seq_GO.tsv contains interpro protein id, protein sequence length, sequence and GO terms label (GO:XXXX). The header of the file follows this order. Note that GO describes biological knowledge with respect to three aspects: Molecular Function (MF), Cellular Component (CC) and Biological Process (BP). For a protein, its label may contain MF, CC, and BP simultaneously. So different GENE3D labels are separated by " " and annotated with (molecular_function/cellular_component/biological_process).
+protein_seq_GO.tsv contains interpro protein id, protein sequence length, sequence and GO terms label (GO:XXXX). The header of the file follows this order. Note that GO describes biological knowledge with respect to three aspects: Molecular Function (MF), Cellular Component (CC) and Biological Process (BP). For a protein, its label may contain MF, CC, and BP simultaneously. So different GO terms are separated by "," and annotated with (molecular_function/cellular_component/biological_process).
