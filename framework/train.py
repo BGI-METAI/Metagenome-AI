@@ -90,10 +90,6 @@ class EarlyStopper:
         return False
 
 
-def get_all_sentences(ds, lang):
-    return ds[lang]
-
-
 def get_ds(config):
     train_ds_raw = pd.read_csv(config["train"])
     le = LabelEncoder()
@@ -159,7 +155,8 @@ def train_model(config):
 
     # model = DistributedDataParallel(model)
     timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
-    writer = SummaryWriter(config["experiment_name"] + timestamp)
+    if config["tensorboard"]:
+        writer = SummaryWriter(config["experiment_name"] + timestamp)
 
     initial_epoch = 0
     global_step = 0
@@ -230,8 +227,9 @@ def train_model(config):
         train_loss_list.append(train_loss)
 
         # Tensorboard
-        writer.add_scalar("Training loss", train_loss, global_step)
-        writer.flush()
+        if config["tensorboard"]:
+            writer.add_scalar("Training loss", train_loss, global_step)
+            writer.flush()
 
         # Validation loop
         val_loss = 0
@@ -272,8 +270,9 @@ def train_model(config):
         )
 
         # Tensorboard
-        writer.add_scalar("Validation loss", val_loss, global_step)
-        writer.flush()
+        if config["tensorboard"]:
+            writer.add_scalar("Validation loss", val_loss, global_step)
+            writer.flush()
 
         if early_stopper.early_stop(val_loss):
             print("Early stopping...")
@@ -293,7 +292,7 @@ def train_model(config):
             model_filename,
         )
 
-    # Plot loss
+    # Test loop
     classifier.eval()
     predicted_labels = []
     with torch.no_grad():
@@ -324,6 +323,7 @@ def train_model(config):
     acc = acc / len(test_dataloader)
     f1 = f1 / len(test_dataloader)
 
+    # Plot loss
     fig, ax = plt.subplots()
     ax.plot(val_loss_list, label="Validation")
     ax.plot(train_loss_list, label="Training")
