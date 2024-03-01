@@ -3,23 +3,21 @@ from pathlib import Path
 
 def get_config():
     return {
-        # "train": "/goofys/projects/MAI/data/brain-genomics-public/pfam.train.csv",
-        "train": "../transformer/pfam_tiny_1579.train.csv",
-        "valid": None,
-        # "valid": "/goofys/projects/MAI/data/brain-genomics-public/pfam.valid.csv",
-        "test": None,
+        "train": "/home/share/huadjyin/home/nikolamilicevic/META_AI/pfam/pfam.train.csv",
+        "valid": "/home/share/huadjyin/home/nikolamilicevic/META_AI/pfam/pfam.valid.csv",
+        "test": "/home/share/huadjyin/home/nikolamilicevic/META_AI/pfam/pfam.test.csv",
         "batch_size": 32,
-        "num_epochs": 2,
+        "num_epochs": 15,
         "lr": 1e-3,
         "emb_type": "ESM",
         "label": "label",
-        # "sequence": "seq",
-        "sequence": "original",
+        "max_seq_len": 600 * 2,
+        "sequence": "seq",
         "target": "family",
         "model_folder": "weights",
-        "model_basename": "model_",
+        "model_basename": "esm_model_",
         "preload": None,
-        "experiment_name": "runs/esmSmall",
+        "experiment_name": "runs/esm",
         "tensorboard": False,
     }
 
