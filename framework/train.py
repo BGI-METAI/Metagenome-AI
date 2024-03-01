@@ -1,4 +1,3 @@
-import csv
 import datetime
 import warnings
 from pathlib import Path
@@ -15,12 +14,12 @@ from torch.utils import data
 from torch.optim.lr_scheduler import StepLR, LinearLR
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-
 # # Enable Multi-GPU training
-# from torch.nn.parallel import DistributedDataParallel as DDP
-# import torch.multiprocessing as mp
-# from torch.utils.data.distributed import DistributedSampler
-# from torch.distributed import init_process_group, destroy_process_group
+from torch.nn.parallel import DistributedDataParallel as DDP
+import torch.multiprocessing as mp
+from torch.utils.data.distributed import DistributedSampler
+from torch.distributed import init_process_group, destroy_process_group
+import os
 
 from embedding import EsmEmbedding
 from dataset import CustomDataset
@@ -33,16 +32,16 @@ from config import get_config, get_weights_file_path
 # This is essential even for single machine, multiple GPU training
 # dist.init_process_group(backend='nccl', init_method='tcp://localhost:FREE_PORT', world_size=1, rank=0)
 # The distributed process group contains all the processes that can communicate and synchronize with each other.
-# def ddp_setup(rank, world_size):
-#     """
-#     Args:
-#         rank: Unique identifier of each process
-#         world_size: Total number of processes
-#     """
-#     os.environ["MASTER_ADDR"] = "localhost"
-#     os.environ["MASTER_PORT"] = "12356"
-#     init_process_group(backend="nccl", rank=rank, world_size=world_size)
-#     torch.cuda.set_device(rank)
+def ddp_setup(rank, world_size):
+    """
+    Args:
+        rank: Unique identifier of each process
+        world_size: Total number of processes
+    """
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "12356"
+    init_process_group(backend="nccl", rank=rank, world_size=world_size)
+    torch.cuda.set_device(rank)
 
 
 class Classifier(nn.Module):
@@ -118,7 +117,7 @@ def get_ds(config):
         num_workers=4,
         pin_memory=True,
         persistent_workers=True,
-        # sampler=DistributedSampler(train_ds),
+        sampler=DistributedSampler(train_ds),
     )
     val_dataloader = data.DataLoader(
         val_ds, batch_size=config["batch_size"], shuffle=False
@@ -137,21 +136,20 @@ def choose_llm(config):
         raise NotImplementedError("This type of embedding is not supported")
 
 
-def train_model(config):
-    # def train_model(rank, config, world_size):
+# def train_model(config):
+def train_model(rank, config, world_size):
     # Define the device
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    rank = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
     # print(f"Using device {device}")
-    # ddp_setup(rank, world_size)
+    ddp_setup(rank, world_size)
 
     Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
 
     train_dataloader, val_dataloader, test_dataloader, le = get_ds(config)
 
-    model = choose_llm(config)
-    model.to(rank)
-    # model = DDP(model, device_ids=[rank])
+    llm = choose_llm(config)
+    llm.to(device)
 
     # model = DistributedDataParallel(model)
     timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
@@ -179,7 +177,7 @@ def train_model(config):
     # Fine-tune the classifier using the embeddings to predict protein families
     # d_model = config["d_model"]
     # Each model should return its embedding dimension
-    d_model = model.get_embedding_dim()
+    d_model = llm.get_embedding_dim()
     num_classes = len(le.classes_)
     # classifier = Classifier(d_model, num_classes, [int((d_model + num_classes) / 2)])
     # Embedding layers transform the original data (AA sequence) into some semantic-aware
@@ -188,7 +186,9 @@ def train_model(config):
     # of adding multiple FCs, why not just add another attention block? On the other hand, the embeddings
     # from a decent model should have large inter-class distance and small intra-class variance, which could
     #  easily be projected to their corresponding classes in a linear fashion, and a FC is more than enough.
+    # classifier = Classifier(d_model, num_classes).to(rank)
     classifier = Classifier(d_model, num_classes).to(rank)
+    classifier = DDP(classifier, device_ids=[rank])
 
     optimizer = torch.optim.Adam(classifier.parameters(), lr=config["lr"], eps=1e-9)
     scheduler = StepLR(optimizer, step_size=3, gamma=0.7)
@@ -197,13 +197,18 @@ def train_model(config):
 
     # Training loop
     for epoch in range(config["num_epochs"]):
+        train_dataloader.sampler.set_epoch(epoch)
+
         batch_iterator = tqdm(train_dataloader, desc=f"Processing epoch: {epoch:02d}")
+        mem_used = torch.cuda.max_memory_allocated() / (1024**3)
+        print(f"GPU_{rank} used {mem_used:.2f} GB")
+        torch.cuda.reset_peak_memory_stats()
         train_loss = 0
         classifier.train()
         for batch in batch_iterator:
             optimizer.zero_grad()
 
-            embedding = model.get_embedding(batch, pooling="cls")
+            embedding = llm.get_embedding(batch, pooling="mean")
             classifier_output = classifier(embedding)
 
             target = batch[config["target"]].to(rank)
@@ -238,7 +243,7 @@ def train_model(config):
             acc = 0
             f1 = 0
             for batch in val_dataloader:
-                embedding = model.get_embedding(batch)
+                embedding = llm.get_embedding(batch)
 
                 classifier_output = classifier(embedding)
                 target = batch[config["target"]].to(rank)
@@ -281,25 +286,26 @@ def train_model(config):
         global_step += 1
 
         # Save model at the end of every epoch
-        model_filename = get_weights_file_path(config, f"{epoch:02d}")
-        torch.save(
-            {
-                "epoch": epoch,
-                "model_state_dict": classifier.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "global_step": global_step,
-            },
-            model_filename,
-        )
+        if rank == 0:
+            model_filename = get_weights_file_path(config, f"{epoch:02d}")
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state_dict": classifier.module.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "global_step": global_step,
+                },
+                model_filename,
+            )
 
     # Test loop
     classifier.eval()
     predicted_labels = []
+    acc = 0
+    f1 = 0
     with torch.no_grad():
-        acc = 0
-        f1 = 0
         for batch in test_dataloader:
-            embedding = model.get_embedding(batch)
+            embedding = llm.get_embedding(batch)
 
             classifier_output = classifier(embedding)
             target = batch[config["target"]].to(rank)
@@ -318,10 +324,12 @@ def train_model(config):
 
     # Saving results to csv
     df_result = pd.DataFrame(predicted_labels)
-    df_result.to_csv(f"out_{config['emb_type']}.csv")
+    df_result.to_csv(f"out_{config['emb_type']}_{timestamp}.csv")
 
     acc = acc / len(test_dataloader)
     f1 = f1 / len(test_dataloader)
+
+    print(f"[TEST SET] Accuracy: {acc:.2f} F1: {f1:.2f}")
 
     # Plot loss
     fig, ax = plt.subplots()
@@ -349,5 +357,5 @@ if __name__ == "__main__":
     warnings.filterwarnings("ignore")
     config = get_config()
     world_size = torch.cuda.device_count()
-    # mp.spawn(train_model, args=(config, world_size), nprocs=world_size)
-    train_model(config)
+    mp.spawn(train_model, args=(config, world_size), nprocs=world_size)
+    # train_model(config)
