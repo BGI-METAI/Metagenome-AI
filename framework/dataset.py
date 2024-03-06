@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import Dataset
 
 
+
 class CustomDataset(Dataset):
     def __init__(self, dataset, config):
         self.dataset = dataset
