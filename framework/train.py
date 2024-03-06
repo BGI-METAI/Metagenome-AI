@@ -181,7 +181,7 @@ def train_model_test(rank, config, world_size):
     print(f'Process {dist.get_rank()}: {own.item()} -> {gathered_tensor}')
 
 
-def train_model(rank, config, world_size):
+def train_classifier(rank, config, world_size):
     print(f"GPU RANK: {rank}")
     # Define the device
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -451,5 +451,5 @@ if __name__ == "__main__":
     config = get_config()
     world_size = torch.cuda.device_count()
     # world_size = 2
-    mp.spawn(train_model, args=(config, world_size), nprocs=world_size)
+    mp.spawn(train_classifier, args=(config, world_size), nprocs=world_size)
     # train_model(config)
