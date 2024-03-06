@@ -1,3 +1,14 @@
+#!/usr/bin/env python
+# -*-coding:utf-8 -*-
+'''
+@File    :   embedding.py
+@Time    :   2024/03/06 21:02:02
+@Author  :   Nikola Milicevic 
+@Version :   1.0
+@Contact :   nikolamilicevic@genomics.cn
+@Desc    :   None
+'''
+
 from abc import ABC, abstractmethod
 import torch
 from torch.nn import Identity
@@ -24,8 +35,8 @@ class EsmEmbedding(Embedding):
         #     "facebookresearch/esm:main", "esm2_t12_35M_UR50D"
         # )
         # model, alphabet = esm.pretrained.esm2_t36_3B_UR50D()
-        model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
-        # model, alphabet = esm.pretrained.esm2_t12_35M_UR50D()
+        # model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
+        model, alphabet = esm.pretrained.esm2_t12_35M_UR50D()
         self.model = model
         self.alphabet = alphabet
         self.model.contact_head = Identity()
