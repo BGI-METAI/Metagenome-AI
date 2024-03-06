@@ -3,11 +3,13 @@ from pathlib import Path
 
 def get_config():
     return {
-        "train": "/home/share/huadjyin/home/nikolamilicevic/META_AI/pfam/pfam.train.csv",
-        "valid": "/home/share/huadjyin/home/nikolamilicevic/META_AI/pfam/pfam.valid.csv",
-        "test": "/home/share/huadjyin/home/nikolamilicevic/META_AI/pfam/pfam.test.csv",
-        "batch_size": 32,
-        "num_epochs": 15,
+        "train":
+        "/home/share/huadjyin/home/nikolamilicevic/pfam_subs/pfam.train.subs.csv",
+        "valid":
+        "/home/share/huadjyin/home/nikolamilicevic/pfam_subs/pfam.valid.subs.csv",
+        "test": "/home/share/huadjyin/home/nikolamilicevic/pfam_subs/pfam.test.subs.csv",
+        "batch_size": 64,
+        "num_epochs": 10,
         "lr": 1e-3,
         "emb_type": "ESM",
         "label": "label",
