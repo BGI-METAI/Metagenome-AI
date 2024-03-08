@@ -1,23 +1,27 @@
-import torch
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# @Time    : 3/8/24 4:56 PM
+# @Author  : zhangchao
+# @File    : dataset.py
+# @Email   : zhangchao5@genomics.cn
+import pandas as pd
+
 from torch.utils.data import Dataset
 
 
-
-class CustomDataset(Dataset):
-    def __init__(self, dataset, config):
+class CustomDataFrameDataset(Dataset):
+    def __init__(
+            self,
+            dataset: pd.DataFrame,
+            sequence_key: str = 'sequence',
+            target_key: str = 'label'
+    ):
         self.dataset = dataset
-        self.label = config["label"]
-        self.sequence = config["sequence"]
-        self.target = config["target"]
-        self.max_seq_len = config["max_seq_len"]
+        self.sequence_list = self.dataset[sequence_key].tolist()
+        self.target_list = self.dataset[target_key].tolist()
 
     def __len__(self):
-        return len(self.dataset)
+        return self.dataset.shape[0]
 
     def __getitem__(self, idx):
-        seq_label_pair = self.dataset[idx]
-        sample = {
-            "sequence": seq_label_pair[self.sequence][:self.max_seq_len],
-            self.target: seq_label_pair["le_" + self.label],
-        }
-        return sample
+        return self.sequence_list[idx], self.target_list[idx]
