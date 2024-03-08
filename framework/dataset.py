@@ -1,3 +1,14 @@
+#!/usr/bin/env python
+# -*-coding:utf-8 -*-
+'''
+@File    :   dataset.py
+@Time    :   2024/03/06 21:02:16
+@Author  :   Nikola Milicevic 
+@Version :   1.0
+@Contact :   nikolamilicevic@genomics.cn
+@Desc    :   None
+'''
+
 import torch
 from torch.utils.data import Dataset
 
