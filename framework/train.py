@@ -24,9 +24,9 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.distributed import init_process_group, destroy_process_group
 import torch.distributed as dist
 
-from embedding import EsmEmbedding
-from dataset import CustomDataset
-from config import get_config, get_weights_file_path
+from framework.config import get_weights_file_path, get_config
+from framework.dataset import CustomDataset
+from framework.esm2 import Esm2Embeddings
 
 
 def init_logger():
@@ -146,7 +146,7 @@ def get_ds(config):
 
 def choose_llm(config):
     if config["emb_type"] == "ESM":
-        return EsmEmbedding()
+        return Esm2Embeddings()
     else:
         raise NotImplementedError("This type of embedding is not supported")
 
@@ -210,6 +210,7 @@ def train_classifier(rank, config, world_size):
     if config["tensorboard"]:
         writer = SummaryWriter(config["experiment_name"] + timestamp)
 
+    optimizer = torch.optim.Adam(llm.parameters(), lr=config["lr"], eps=1e-9)
     initial_epoch = 0
     global_step = 0
 
