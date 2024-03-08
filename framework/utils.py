@@ -4,6 +4,7 @@
 # @Author  : zhangchao
 # @File    : utils.py
 # @Email   : zhangchao5@genomics.cn
+import logging
 import numpy as np
 
 
@@ -26,3 +27,13 @@ class EarlyStopper:
             if self.counter >= self.patience:
                 return True
         return False
+
+
+def init_logger(timestamp):
+    logging.basicConfig(
+        format="%(name)-12s %(levelname)-8s %(message)s",
+        level=logging.INFO,
+        filename=f"{timestamp}.log",
+    )
+    return logging.getLogger(__name__)
+
