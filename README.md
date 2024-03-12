@@ -25,10 +25,10 @@ Thus, the result file contains protein id, sequence, and label is obtained. Up t
         
 Later, noting that a protein may correspond to multiple PFAM (GENE3D) labels, we found that the reason for this is that each label has a fragment of amino acid sequence belonging to the protein. Therefore, we reprocessed the `match_complete.xml` file to obtain the amino acid sequence start and end position information corresponding to all functional labels under each protein (output file is `fragment_match_complete_out.txt`).
 
-After that, we focused on the functional annotation of PFAM and GENE3D, combining the start and end position information of amino acid sequence fragments with the `protein_seq_PFAM.tsv` and `protein_seq_GENE3D.tsv` files obtained above to obtain the `protein_seq_PFAM_fragment.txt` and `protein_seq_GENE3D_fragment.txt` files.
+After that, we focused on the functional annotation of PFAM and GENE3D, combining the start and end position information of amino acid sequence fragments (`fragment_match_complete_out.txt`) with the `protein_seq_PFAM.tsv` and `protein_seq_GENE3D.tsv` files described above to obtain the `protein_seq_PFAM_fragment.txt` and `protein_seq_GENE3D_fragment.txt` files.
 
 ---
->`protein_seq_PFAM_fragment.txt` contains interpro protein id, complete protein sequence, PFAM labels, start position, end position and fragment annotation.The header of the file follows this order. Note that the >protein sequence in this file is complete (not a fragment), it is not segmented according to the location interval, you can use `awk` to get the amino acid sequence fragment of the fixed location of the protein.
+>`protein_seq_PFAM_fragment.txt` contains interpro protein id, complete protein sequence, PFAM labels, start position, end position and fragment annotation.The header of the file follows this order. Note that the protein sequence in this file is complete (not a fragment), it is not segmented according to the location interval, you can use `awk` to get the amino acid sequence fragment of the fixed location of the protein.
 >```
 >awk '{ $2 = substr($2, $4, $5-$4+1); print }' protein_seq_PFAM_fragment.txt
 >```
