@@ -27,11 +27,12 @@ Later, noting that a protein may correspond to multiple PFAM (GENE3D) labels, we
 
 After that, we focused on the functional annotation of PFAM and GENE3D, combining the start and end position information of amino acid sequence fragments with the `protein_seq_PFAM.tsv` and `protein_seq_GENE3D.tsv` files obtained above to obtain the `protein_seq_PFAM_fragment.txt` and `protein_seq_GENE3D_fragment.txt` files.
 
-`protein_seq_PFAM_fragment.txt` contains interpro protein id, complete protein sequence, PFAM labels, start position, end position and fragment annotation.The header of the file follows this order. Note that the protein sequence in this file is complete (not a fragment), it is not segmented according to the location interval, you can use `awk` to get the amino acid sequence fragment of the fixed location of the protein.
-```
-awk '{ $2 = substr($2, $4, $5-$4+1); print }' protein_seq_PFAM_fragment.txt
-```
-The same applies to `protein_seq_GENE3D_fragment.txt` file.
+---
+>`protein_seq_PFAM_fragment.txt` contains interpro protein id, complete protein sequence, PFAM labels, start position, end position and fragment annotation.The header of the file follows this order. Note that the >protein sequence in this file is complete (not a fragment), it is not segmented according to the location interval, you can use `awk` to get the amino acid sequence fragment of the fixed location of the protein.
+>```
+>awk '{ $2 = substr($2, $4, $5-$4+1); print }' protein_seq_PFAM_fragment.txt
+>```
+>The same applies to `protein_seq_GENE3D_fragment.txt` file.
 
 The statistics of the `protein_seq_PFAM_fragment.txt` file are 163,353,266 proteins, 272,102,534 protein fragments (number of file lines), and 20,793 PFAM families. And the statistics of the `protein_seq_GENE3D_fragment.txt` file are 143,196,535 proteins, 266,600,993 protein fragments, and 6,595 GENE3D domains.
 
