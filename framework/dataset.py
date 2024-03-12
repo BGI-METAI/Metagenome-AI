@@ -25,3 +25,14 @@ class CustomDataFrameDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.sequence_list[idx], self.target_list[idx]
+
+
+class CustomNERDataset(Dataset):
+    def __init__(self):
+        pass
+
+    def __len__(self):
+        raise NotImplementedError
+
+    def __getitem__(self, idx):
+        raise NotImplementedError
