@@ -26,7 +26,7 @@ class LinearLayerModule(nn.Module):
             self.layer = nn.Linear(input_dims, output_dims, bias=False)
 
         if is_bn:
-            self.bn = nn.BatchNorm1d(output_dims)
+            self.bn = nn.LayerNorm(output_dims)
         else:
             self.bn = None
 
