@@ -94,7 +94,7 @@ class ProtTransEmbeddings(Embeddings):
             protein_seq: Optional[Union[str, List[str]]],
             *,
             add_separator: bool = True,
-            pooling: Optional[Union[POOLING_CLS_TYPE, POOLING_MEAN_TYPE, POOLING_SUM_TYPE]],
+            pooling: Optional[Union[POOLING_CLS_TYPE, POOLING_MEAN_TYPE, POOLING_SUM_TYPE, POOLING_ALL_TYPE]],
             **kwargs
     ):
         """
@@ -120,7 +120,6 @@ class ProtTransEmbeddings(Embeddings):
         embeddings = self.model(input_ids=input_ids, attention_mask=attention_mask)
 
         embeddings = embeddings.last_hidden_state
-        self.embedding_dims = embeddings.size(2)
 
         if pooling == POOLING_CLS_TYPE:
             if self.mode in [PROTTRANS_BERT_TYPE, PROTTRANS_ALBERT_TYPE]:
@@ -135,6 +134,10 @@ class ProtTransEmbeddings(Embeddings):
         elif pooling == POOLING_ALL_TYPE:
             return embeddings.detach().cpu().numpy()
 
+    @property
     def get_embedding_dim(self):
-        return self.embedding_dims
+        if self.mode == PROTTRANS_T5_TYPE:
+            return 1024
+        elif self.mode == PROTTRANS_BERT_TYPE:
+            return 1024
 
