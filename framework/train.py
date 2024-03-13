@@ -20,7 +20,7 @@ from tqdm import tqdm
 
 from framework.classifier import FullLinearClassifier, AminoAcidsNERClassifier
 from framework.classifier.loss_fn import ProteinLoss
-from framework.dataset import CustomDataFrameDataset
+from framework.dataset import CustomDataFrameDataset, CustomNERDataset
 from framework.utils import EarlyStopper
 
 TRAIN_LOADER_TYPE: str = 'train'
@@ -31,9 +31,9 @@ TEST_LOADER_TYPE: str = 'test'
 class ProteinAnnTrainer:
     model: Optional[Union[FullLinearClassifier, AminoAcidsNERClassifier]] = None
     device: torch.device = None
-    train_loader: DataLoader = None
-    valid_loader: DataLoader = None
-    test_loader: DataLoader = None
+    train_loader: Optional[Union[DataLoader, CustomNERDataset]] = None
+    valid_loader: Optional[Union[DataLoader, CustomNERDataset]] = None
+    test_loader: Optional[Union[DataLoader, CustomNERDataset]] = None
     batch_size: int = 1
 
     def wandb_register(
