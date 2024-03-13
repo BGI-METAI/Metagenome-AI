@@ -4,11 +4,13 @@
 # @Author  : zhangchao
 # @File    : protein_aa_ner.py
 # @Email   : zhangchao5@genomics.cn
+import torch.nn as nn
 from framework.classifier.linear_layer_module import LinearLayerModule
 
 
-class AminoAcidsNERClassifier:
+class AminoAcidsNERClassifier(nn.Module):
     def __init__(self, input_dims, hidden_dims, num_classes):
+        super(AminoAcidsNERClassifier, self).__init__()
         self.layer = LinearLayerModule(
             input_dims=input_dims,
             output_dims=hidden_dims,
