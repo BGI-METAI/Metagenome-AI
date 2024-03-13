@@ -43,4 +43,4 @@ class CustomNERDataset(Dataset):
     def __getitem__(self, idx):
         with open(self.pairs_path[idx], 'rb') as file:
             data = pickle.load(file)
-        return data['seq'], data['label']
+        return {'seq': data['seq'], 'label': data['label']}
