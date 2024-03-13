@@ -13,5 +13,6 @@ PROTTRANS_XLENT_TYPE: str = 'xlent'
 POOLING_CLS_TYPE: str = 'cls'
 POOLING_MEAN_TYPE: str = 'mean'
 POOLING_SUM_TYPE: str = 'sum'
+POOLING_ALL_TYPE: str = 'all'
 
 from .prottrans_embeddings import ProtTransEmbeddings

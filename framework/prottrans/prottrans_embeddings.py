@@ -13,7 +13,7 @@ from transformers import T5Tokenizer, T5EncoderModel, BertTokenizer, BertModel, 
 
 from framework.embeddings import Embeddings
 from framework.prottrans import PROTTRANS_T5_TYPE, PROTTRANS_BERT_TYPE, PROTTRANS_ALBERT_TYPE, PROTTRANS_XLENT_TYPE, \
-    POOLING_CLS_TYPE, POOLING_MEAN_TYPE, POOLING_SUM_TYPE
+    POOLING_CLS_TYPE, POOLING_MEAN_TYPE, POOLING_SUM_TYPE, POOLING_ALL_TYPE
 
 
 class ProtTransEmbeddings(Embeddings):
@@ -132,6 +132,8 @@ class ProtTransEmbeddings(Embeddings):
             return embeddings.mean(1).detach().cpu().numpy()
         elif pooling == POOLING_SUM_TYPE:
             return embeddings.sum(1).detach().cpu().numpy()
+        elif pooling == POOLING_ALL_TYPE:
+            return embeddings.detach().cpu().numpy()
 
     def get_embedding_dim(self):
         return self.embedding_dims
