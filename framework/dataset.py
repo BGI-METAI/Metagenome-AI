@@ -4,6 +4,9 @@
 # @Author  : zhangchao
 # @File    : dataset.py
 # @Email   : zhangchao5@genomics.cn
+import pickle
+from typing import List
+
 import pandas as pd
 
 from torch.utils.data import Dataset
@@ -28,11 +31,16 @@ class CustomDataFrameDataset(Dataset):
 
 
 class CustomNERDataset(Dataset):
-    def __init__(self):
-        pass
+    def __init__(
+            self,
+            processed_sequence_label_pairs_path: List[str]
+    ):
+        self.pairs_path = processed_sequence_label_pairs_path
 
     def __len__(self):
-        raise NotImplementedError
+        return len(self.pairs_path)
 
     def __getitem__(self, idx):
-        raise NotImplementedError
+        with open(self.pairs_path[idx], 'rb') as file:
+            data = pickle.load(file)
+        return data['seq'], data['label']
