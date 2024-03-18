@@ -16,6 +16,11 @@ class ParseConfig:
             default='/home/share/huadjyin/home/s_cenweixuan/dataset/pfam/sub_pfam',
             help='the path of input dataset'
         )
+        parser.add_argument(
+            '--output_home',
+            type=str,
+            default='./output/protein_anno_NER'
+        )
         parser.add_argument('--seed', type=int, default=42, help='random seed')
 
         parser.add_argument(
@@ -33,7 +38,7 @@ class ParseConfig:
         parser.add_argument('--num_classes', type=int, default=20794, help='the number of categories')
 
         parser.add_argument('--local_rank', type=int, default=0, help='Rank of the current process (it should be a number between 0 and ``world_size``-1).')
-        parser.add_argument('--world_size', type=int, default=4, help='parameter of initialize DDP')
+        # parser.add_argument('--world_size', type=int, default=4, help='parameter of initialize DDP')
 
         return parser.parse_args()
 

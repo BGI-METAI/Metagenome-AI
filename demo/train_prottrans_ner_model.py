@@ -7,11 +7,15 @@
 import os
 import os.path as osp
 import random
+import torch
+import torch.multiprocessing as mp
 from framework import ProteinNERTrainer, ParseConfig
 from framework.classifier import AminoAcidsNERClassifier
 from framework.base_train import TRAIN_LOADER_TYPE, TEST_LOADER_TYPE
+from framework.prottrans import ProtTransEmbeddings
 
-if __name__ == '__main__':
+
+def test(world_size):
     config = ParseConfig.register_parameters()
 
     files = [osp.join(config.data_path, f) for f in os.listdir(config.data_path) if f.endswith('pkl')]
@@ -20,7 +24,8 @@ if __name__ == '__main__':
     train_files = files[:round(len(files) * config.train_size)]
     test_files = files[round(len(files) * config.train_size):]
 
-    trainer = ProteinNERTrainer(config=config)
+    trainer = ProteinNERTrainer()
+    trainer.ddp_register(rank=config.rank, world_size=world_size)
 
     trainer.dataset_register(
         data_files=train_files,
@@ -41,11 +46,25 @@ if __name__ == '__main__':
         do_lower_case=False
     )
 
+    embedding_model = ProtTransEmbeddings(
+        model_name_or_path=config.model_path_or_name,
+        mode=config.embed_mode,
+        local_rank=config.local_rank
+    )
+
     classifier = AminoAcidsNERClassifier(
         input_dims=trainer.embedding_model.get_embedding_dim,
         hidden_dims=1024,
         num_classes=config.num_classes
     )
 
-    trainer.model_register(model=classifier)
-    trainer.train(output_home='./output/protein_anno_NER')
+    trainer.model_register(model=embedding_model, local_rank=config.local_rank)
+    trainer.model_register(model=classifier, local_rank=config.local_rank)
+    trainer.train(
+        output_home=config.output_home
+    )
+
+
+if __name__ == '__main__':
+    world_size=torch.cuda.device_count()
+    mp.spawn(test, args=(world_size,), nprocs=world_size)

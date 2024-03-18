@@ -56,9 +56,9 @@ class ProtTransEmbeddings(Embeddings):
         else:
             raise ValueError(
                 "Got an invalid `mode`, only support `PROTTRANS_T5_TYPE`, `PROTTRANS_BERT_TYPE`, `PROTTRANS_ALBERT_TYPE`, `PROTTRANS_XLENT_TYPE`")
-        self.model.to(self.device)
-
-        self.model = DDP(self.model, device_ids=[local_rank], output_device=local_rank)
+        # self.model.to(self.device)
+        #
+        # self.model = DDP(self.model, device_ids=[local_rank], output_device=local_rank)
         self.model.eval()
 
     @torch.no_grad()
