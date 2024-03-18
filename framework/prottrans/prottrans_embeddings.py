@@ -4,12 +4,11 @@
 # @Author  : zhangchao
 # @File    : prottrans_embeddings.py
 # @Email   : zhangchao5@genomics.cn
-import re
 import torch
-from typing import Optional, Union, List
+from typing import Optional, Union
+from torch.nn.parallel import DistributedDataParallel as DDP
 
-from transformers import T5Tokenizer, T5EncoderModel, BertTokenizer, BertModel, AlbertTokenizer, AlbertModel, \
-    XLNetTokenizer, XLNetModel
+from transformers import T5EncoderModel, BertModel, AlbertModel, XLNetModel
 
 from framework.embeddings import Embeddings
 from framework.prottrans import PROTTRANS_T5_TYPE, PROTTRANS_BERT_TYPE, PROTTRANS_ALBERT_TYPE, PROTTRANS_XLENT_TYPE, \
@@ -40,99 +39,73 @@ class ProtTransEmbeddings(Embeddings):
             Select the prottrans model to use. Support `PROTTRANS_T5_TYPE`, `PROTTRANS_BERT_TYPE`,
             `PROTTRANS_ALBERT_TYPE`, `PROTTRANS_XLENT_TYPE`
         """
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        local_rank = kwargs.get('local_rank')
+        self.device = torch.device('cuda', local_rank)
+
         self.mode = mode
         self.embedding_dims = None
 
         if mode == PROTTRANS_T5_TYPE:
-            self.tokenizer = T5Tokenizer.from_pretrained(model_name_or_path, **kwargs)
-            self.model = T5EncoderModel.from_pretrained(model_name_or_path).to(self.device)
+            self.model = T5EncoderModel.from_pretrained(model_name_or_path)
         elif mode == PROTTRANS_BERT_TYPE:
-            self.tokenizer = BertTokenizer.from_pretrained(model_name_or_path, **kwargs)
-            self.model = BertModel.from_pretrained(model_name_or_path).to(self.device)
+            self.model = BertModel.from_pretrained(model_name_or_path)
         elif mode == PROTTRANS_ALBERT_TYPE:
-            self.tokenizer = AlbertTokenizer.from_pretrained(model_name_or_path, **kwargs)
-            self.model = AlbertModel.from_pretrained(model_name_or_path).to(self.device)
+            self.model = AlbertModel.from_pretrained(model_name_or_path)
         elif mode == PROTTRANS_XLENT_TYPE:
-            self.tokenizer = XLNetTokenizer.from_pretrained(model_name_or_path, **kwargs)
-            self.model = XLNetModel.from_pretrained(model_name_or_path).to(self.device)
+            self.model = XLNetModel.from_pretrained(model_name_or_path)
         else:
             raise ValueError(
                 "Got an invalid `mode`, only support `PROTTRANS_T5_TYPE`, `PROTTRANS_BERT_TYPE`, `PROTTRANS_ALBERT_TYPE`, `PROTTRANS_XLENT_TYPE`")
+        self.model.to(self.device)
+
+        self.model = DDP(self.model, device_ids=[local_rank], output_device=local_rank)
         self.model.eval()
-
-    @staticmethod
-    def prepare_sequence(
-            sequence: Optional[Union[str, List[str]]],
-            add_separator: bool = True
-    ) -> List[str]:
-        """
-        prepare protein sequence, add a space separator between each amino acid character and replace rare amino acids with `X`.
-
-        :param sequence:
-            amino acid sequences
-        :param add_separator:
-            whether to add space delimiters to each sequence. default is True.
-        :return:
-        """
-        if isinstance(sequence, List):
-            sequence = [re.sub(r'[UZOB]', 'X', seq) for seq in sequence]
-
-        elif isinstance(sequence, str):
-            sequence = [re.sub(r'[UZOB]', 'X', sequence)]
-        else:
-            raise ValueError('Error: Got an invalid protein sequence!')
-
-        if add_separator:
-            return [' '.join(list(seq)) for seq in sequence]
-        else:
-            return sequence
 
     @torch.no_grad()
     def get_embedding(
             self,
-            protein_seq: Optional[Union[str, List[str]]],
+            input_ids: torch.Tensor,
+            attention_mask: torch.Tensor,
             *,
-            add_separator: bool = True,
-            pooling: Optional[Union[POOLING_CLS_TYPE, POOLING_MEAN_TYPE, POOLING_SUM_TYPE, POOLING_ALL_TYPE]],
-            **kwargs
+            pooling: Optional[
+                Union[POOLING_CLS_TYPE, POOLING_MEAN_TYPE, POOLING_SUM_TYPE, POOLING_ALL_TYPE]] = POOLING_ALL_TYPE,
+            convert2numpy: bool = False
     ):
         """
         calculate protein sequence embeddings using the pLMs.
 
-        :param protein_seq:
+        :param input_ids:
             the input amino acid sequences
-        :param add_separator:
-            whether to add space delimiters to each sequence. default is True.
+        :param attention_mask:
         :param pooling:
             which method to be choose to generate the final protein sequence embeddings.
+        :param convert2numpy:
+            whether to convert the protein embedding to numpy format
         :return:
         """
 
-        protein_seq = self.prepare_sequence(sequence=protein_seq, add_separator=add_separator)
-        tokens = self.tokenizer.batch_encode_plus(
-            batch_text_or_text_pairs=protein_seq,
-            add_special_tokens=True,
-            padding='longest'
-        )
-        input_ids = torch.tensor(tokens['input_ids']).to(self.device)
-        attention_mask = torch.tensor(tokens["attention_mask"]).to(self.device)
-        embeddings = self.model(input_ids=input_ids, attention_mask=attention_mask)
-
+        embeddings = self.model(input_ids=input_ids.to(self.device), attention_mask=attention_mask.to(self.device))
         embeddings = embeddings.last_hidden_state
 
         if pooling == POOLING_CLS_TYPE:
             if self.mode in [PROTTRANS_BERT_TYPE, PROTTRANS_ALBERT_TYPE]:
-                return embeddings[:, 0, :].detach().cpu().numpy()
+                result = embeddings[:, 0, :]
             else:
                 raise ValueError(
                     f'Error: `{POOLING_CLS_TYPE}` only support `{PROTTRANS_BERT_TYPE}` and `{PROTTRANS_ALBERT_TYPE}`')
         elif pooling == POOLING_MEAN_TYPE:
-            return embeddings.mean(1).detach().cpu().numpy()
+            result = embeddings.mean(1)
         elif pooling == POOLING_SUM_TYPE:
-            return embeddings.sum(1).detach().cpu().numpy()
+            result = embeddings.sum(1)
         elif pooling == POOLING_ALL_TYPE:
-            return embeddings.detach().cpu().numpy()
+            result = embeddings
+        else:
+            raise ValueError('Invalid output!')
+
+        if convert2numpy:
+            return result.detach().cpu().numpy()
+        else:
+            return result
 
     @property
     def get_embedding_dim(self):
@@ -140,4 +113,3 @@ class ProtTransEmbeddings(Embeddings):
             return 1024
         elif self.mode == PROTTRANS_BERT_TYPE:
             return 1024
-
