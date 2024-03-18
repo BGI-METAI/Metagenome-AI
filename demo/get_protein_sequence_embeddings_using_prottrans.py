@@ -4,30 +4,63 @@
 # @Author  : zhangchao
 # @File    : get_protein_sequence_embeddings_using_prottrans.py
 # @Email   : zhangchao5@genomics.cn
-from framework.prottrans import ProtTransEmbeddings, PROTTRANS_T5_TYPE, POOLING_MEAN_TYPE
+import os
+import os.path as osp
+
+import torch
+import torch.distributed as dist
+from torch.utils.data import DataLoader
+
+from framework import ParseConfig
+from framework.dataset import CustomNERDataset, SequentialDistributedSampler
+from framework.prottrans import ProtTransEmbeddings
 
 if __name__ == '__main__':
+    config = ParseConfig.register_parameters()
 
-    demo_sequences = [
-        'MSIIGATRLQNDKSDTYSAGPCYAGGCSAFTPRGTCGKDWDLGEQTCASGFCTSQPL',
-        'MAFSAEDVLKEYDRRRRMEALLLSLYYPNDRKLLDYKEWSPPRVQVECPKAPVE',
-        'LIVGHFSGIKYKGEKAQASEVDVNKMCCWV'
-    ]
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "12356"
+    dist.init_process_group(
+        backend="nccl",
+        init_method='tcp://localhost:12356',
+        rank=0,
+        world_size=1
+    )
+    torch.cuda.set_device(config.local_rank)
 
-    model_name_or_path = '/media/Data/zhangchao/metageomics/weights/prot_t5_xl_half_uniref50-enc'
+    pairs_path = [osp.join(config.data_path, file) for file in os.listdir(config.data_path)]
+
+    dataset = CustomNERDataset(
+        processed_sequence_label_pairs_path=pairs_path,
+        tokenizer_model_name_or_path=config.model_path_or_name,
+        mode=config.embed_mode,
+        legacy=False,
+        do_lower_case=False
+    )
+    test_sampler = SequentialDistributedSampler(dataset=dataset, batch_size=3)
+
     prottrans_model = ProtTransEmbeddings(
-        model_name_or_path=model_name_or_path,
-        mode=PROTTRANS_T5_TYPE,
-        do_lower_case=False,
-        legacy=False
+        model_name_or_path=config.model_path_or_name,
+        mode=config.embed_mode,
+        local_rank=config.local_rank,
+        legacy=False,
+        do_lower_case=False
     )
 
-    protein_embed = prottrans_model.get_embedding(
-        protein_seq=demo_sequences,
-        add_separator=True,
-        pooling=POOLING_MEAN_TYPE
-    )
+    dataloader = DataLoader(
+        dataset=dataset,
+        batch_size=3,
+        shuffle=False,
+        collate_fn=dataset.collate_fn,
+        sampler=test_sampler)
 
-    print(protein_embed.shape)
-
-
+    for sample in dataloader:
+        input_ids, attention_mask, batch_label = sample
+        protein_vec = prottrans_model.get_embedding(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            pooling='all',
+            convert2numpy=False
+        )
+        print(protein_vec.shape)
+        break
