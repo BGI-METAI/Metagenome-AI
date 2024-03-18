@@ -1,143 +1,90 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @Time    : 3/8/24 4:26 PM
+# @Time    : 3/13/24 11:40 AM
 # @Author  : zhangchao
 # @File    : train.py
 # @Email   : zhangchao5@genomics.cn
 import os
-import os.path as osp
 import wandb
-import socket
 import torch
-import pandas as pd
+import torch.distributed as dist
 
+import os.path as osp
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Union
-from datetime import datetime
-from torch.distributed import init_process_group
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from framework.classifier import FullLinearClassifier, AminoAcidsNERClassifier
 from framework.classifier.loss_fn import ProteinLoss
-from framework.dataset import CustomDataFrameDataset, CustomNERDataset
+from framework.dataset import CustomNERDataset, SequentialDistributedSampler
+from framework.prottrans import ProtTransEmbeddings
+from framework.base_train import ProteinAnnBaseTrainer, TRAIN_LOADER_TYPE, TEST_LOADER_TYPE
 from framework.utils import EarlyStopper
 
-TRAIN_LOADER_TYPE: str = 'train'
-VALID_LOADER_TYPE: str = 'valid'
-TEST_LOADER_TYPE: str = 'test'
 
+class ProteinNERTrainer(ProteinAnnBaseTrainer):
+    def __init__(self, config, **kwargs):
 
-class ProteinAnnTrainer:
-    model: Optional[Union[FullLinearClassifier, AminoAcidsNERClassifier]] = None
-    device: torch.device = None
-    train_loader: Optional[Union[DataLoader, CustomNERDataset]] = None
-    valid_loader: Optional[Union[DataLoader, CustomNERDataset]] = None
-    test_loader: Optional[Union[DataLoader, CustomNERDataset]] = None
-    batch_size: int = 1
+        # initialize DDP
+        self.ddp_register(rank=config.local_rank, world_size=config.world_size)
 
-    def wandb_register(
-            self,
-            user_name: str,
-            project: str = 'protein function annotation',
-            group: str = 'classifier',
-            model_folder: str = '.',
-            timestamp: str = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
-    ):
-        """
-        register wandb to ProteintTrainer
-
-        :param user_name:
-            username or team name where you're sending runs.
-            This entity must exist before you can send runs there,
-            so make sure to create your account or team in the UI before starting to log runs.
-            If you don't specify an entity, the run will be sent to your default entity,
-            which is usually your username. Change your default entity in [your settings](https://wandb.ai/settings)
-            under "default location to create new projects".
-        :param project:
-            The name of the project where you're sending the new run. If the project is not specified, the run is put in an "Uncategorized" project.
-        :param group:
-            Specify a group to organize individual runs into a larger experiment.
-            For example, you might be doing cross validation, or you might have multiple jobs that train and evaluate
-            a model against different test sets. Group gives you a way to organize runs together into a larger whole, and you can toggle this
-            on and off in the UI. For more details, see our [guide to grouping runs](https://docs.wandb.com/guides/runs/grouping).
-        :param model_folder:
-            wandb ouput file save path
-        :param timestamp:
-        :return:
-        """
-        wandb_output_dir = osp.join(model_folder, 'wandb_home')
-        Path(wandb_output_dir).mkdir(parents=True, exist_ok=True)
-        wandb.init(
-            project=project,
-            entity=user_name,
-            notes=socket.gethostname(),
-            name=f'prot_func_anno_{timestamp}',
-            group=group,
-            dir=wandb_output_dir,
-            job_type='training',
-            reinit=True
+        self.embedding_model = ProtTransEmbeddings(
+            model_name_or_path=config.model_path_or_name,
+            mode=config.embed_mode,
+            local_rank=config.local_rank,
         )
-        wandb.watch(self.model, log='all')
 
     def dataset_register(
             self,
-            protein_dataset: pd.DataFrame,
+            data_files,
             *,
-            sequence_key: str = 'sequence',
-            target_key: str = 'label',
-            mode: Optional[Union[TRAIN_LOADER_TYPE, VALID_LOADER_TYPE, TEST_LOADER_TYPE]] = 'train',
             batch_size: int = 1024,
-            shuffle: bool = True,
+            mode: Optional[Union[TRAIN_LOADER_TYPE, TEST_LOADER_TYPE]] = TRAIN_LOADER_TYPE,
             **kwargs
     ):
         self.batch_size = batch_size
-        dataset = CustomDataFrameDataset(protein_dataset, sequence_key=sequence_key, target_key=target_key)
+        tokenizer_model_name_or_path = kwargs.get('tokenizer_model_name_or_path')
+        tokenizer_mode = kwargs.get('tokenizer_mode')
+        legacy = kwargs.get('legacy')
+        do_lower_case = kwargs.get('do_lower_case')
+
+        dataset = CustomNERDataset(
+            processed_sequence_label_pairs_path=data_files,
+            tokenizer_model_name_or_path=tokenizer_model_name_or_path,
+            mode=tokenizer_mode,
+            legacy=legacy,
+            do_lower_case=do_lower_case
+        )
+
         if mode == TRAIN_LOADER_TYPE:
-            self.train_loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, **kwargs)
-        if mode == VALID_LOADER_TYPE:
-            self.valid_loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, **kwargs)
+            train_sampler = torch.utils.data.distributed.DistributedSampler(
+                dataset,
+                # num_replicas=dist.get_world_size(),
+                # rank=dist.get_rank(),
+                # shuffle=False
+            )
+            self.train_loader = DataLoader(
+                dataset=dataset,
+                batch_size=batch_size,
+                collate_fn=dataset.collate_fn,
+                sampler=train_sampler)
         if mode == TEST_LOADER_TYPE:
-            self.test_loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, **kwargs)
-
-    def ddp_setup(self, rank, world_size):
-        """
-        Initialize the PyTorch distributed backend. This is essential even for single machine, multiple GPU training
-        dist.init_process_group(backend='nccl', init_method='tcp://localhost:FREE_PORT', world_size=1, rank=0).
-        The distributed process group contains all the processes that can communicate and synchronize with each other.
-
-        :param rank:
-            Unique identifier of each process
-        :param world_size:
-            Total number of processes
-        :return:
-        """
-        os.environ["MASTER_ADDR"] = "localhost"
-        os.environ["MASTER_PORT"] = "12356"
-        init_process_group(backend="nccl", rank=rank, world_size=world_size)
-        torch.cuda.set_device(rank)
-
-    def model_register(self, model: Optional[Union[FullLinearClassifier, AminoAcidsNERClassifier]]):
-        """
-        register protein sequence model to ProteintTrainer
-
-        :param model:
-            protein sequence model
-        :param device:
-            device
-        :return:
-        """
-        self.device = torch.device('cpu' if not torch.cuda.is_available() else 'cuda')
-        self.model = model.to(self.device)
+            test_sampler = SequentialDistributedSampler(dataset=dataset, batch_size=batch_size)
+            self.test_loader = DataLoader(
+                dataset=dataset,
+                batch_size=batch_size,
+                collate_fn=dataset.collate_fn,
+                sampler=test_sampler)
 
     def train(
             self,
-            max_epoch,
-            learning_rate,
+            max_epoch=100,
+            learning_rate=1e-6,
             weight_decay=5e-4,
             patience=10,
             *,
-            user_name,
+            user_name='zhangchao162',
             load_best_model=True,
             **kwargs):
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay)
@@ -145,32 +92,44 @@ class ProteinAnnTrainer:
         scaler = torch.cuda.amp.GradScaler()
         self.model.train()
 
-        early_stopper = EarlyStopper(patience=patience)
-
-        loss_weight = kwargs.get('loss_weight', default=1.)
-        output_home = kwargs.get('output_home', default='.')
+        loss_weight = kwargs.get('loss_weight', 1.)
+        output_home = kwargs.get('output_home', './protein_anno_NER')
         ckpt_home = osp.join(output_home, 'ckpt')
         Path(ckpt_home).mkdir(parents=True, exist_ok=True)
 
-        self.wandb_register(user_name, model_folder=output_home)
+        self.wandb_register(
+            user_name,
+            project='proteinNER',
+            model_folder=output_home
+        )
 
-        wandb.config({
+        wandb.config = {
             'learning_rate': learning_rate,
             'max_epoch': max_epoch,
             'batch_size': self.batch_size,
-            'loss_weight': loss_weight})
+            'loss_weight': loss_weight}
+
+        early_stopper = EarlyStopper(patience=patience)
 
         for eph in range(max_epoch):
             eph_loss = 0
+            self.train_loader.sampler.set_epoch(eph)
             batch_iterator = tqdm(self.train_loader, desc=f'Processing epoch: {eph:03d}')
-            for batch in batch_iterator:
-                x_data, y_target = batch
-                x_data = x_data.to(self.device)
-                y_target = y_target.to(self.device)
-
+            for sample in batch_iterator:
+                input_ids, attention_mask, batch_label = sample
+                with torch.no_grad():
+                    x_data = self.embedding_model.get_embedding(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        pooling='all'
+                    )
                 with torch.cuda.amp.autocast():
                     predict = self.model(x_data)
-                    loss = ProteinLoss.cross_entropy_loss(pred=predict, target=y_target, weight=loss_weight)
+                    loss = ProteinLoss.cross_entropy_loss(
+                        pred=predict.permute(0, 2, 1),
+                        target=batch_label.long().to(self.device),
+                        weight=loss_weight
+                    )
                 eph_loss += loss.item()
                 batch_iterator.set_postfix({'Training loss': f'{loss.item():.4f}'})
                 wandb.log({'loss': loss.item()})
@@ -187,15 +146,3 @@ class ProteinAnnTrainer:
                 if load_best_model:
                     self.load_ckpt(ckpt_home=ckpt_home)
                 break
-
-    def save_ckpt(self, ckpt_home):
-        torch.save(self.model.state_dict(), os.path.join(ckpt_home, f'protein_ann_{self.model.__name__}.bgi'))
-
-    def load_ckpt(self, ckpt_home):
-        checkpoint = torch.load(
-            os.path.join(ckpt_home, f'protein_ann_{self.model.__name__}.bgi'),
-            map_location=lambda storage, loc: storage)
-        state_dict = self.model.state_dict()
-        trained_dict = {k: v for k, v in checkpoint.items() if k in state_dict}
-        state_dict.update(trained_dict)
-        self.model.load_state_dict(state_dict)

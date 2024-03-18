@@ -7,48 +7,44 @@
 import os
 import os.path as osp
 import random
-from framework import ProteinNERTrainer
+from framework import ProteinNERTrainer, ParseConfig
 from framework.classifier import AminoAcidsNERClassifier
-from framework.prottrans import PROTTRANS_T5_TYPE
-from framework.train import TRAIN_LOADER_TYPE, TEST_LOADER_TYPE
-
-SEED = 42
-TRAIN_SIZE = 0.7
-BATCH_SIZE = 1
-PFAM_NUM = 20794
-
+from framework.base_train import TRAIN_LOADER_TYPE, TEST_LOADER_TYPE
 
 if __name__ == '__main__':
-    path = '/media/Data/zhangchao/metageomics/datasets/pfam_pkls'
-    pretrained_embedding_model_name_or_path = '/media/Data/zhangchao/metageomics/weights/prot_t5_xl_half_uniref50-enc'
-    files = [osp.join(path, f) for f in os.listdir(path) if f.endswith('pkl')]
-    random.seed(SEED)
-    random.shuffle(files)
-    train_files = files[:round(len(files) * TRAIN_SIZE)]
-    test_files = files[round(len(files) * TRAIN_SIZE):]
+    config = ParseConfig.register_parameters()
 
-    trainer = ProteinNERTrainer(
-        pretrained_embedding_model_name_or_path=pretrained_embedding_model_name_or_path,
-        embedding_mode=PROTTRANS_T5_TYPE,
-        do_lower_case=False,
-        legacy=False
-    )
+    files = [osp.join(config.data_path, f) for f in os.listdir(config.data_path) if f.endswith('pkl')]
+    random.seed(config.seed)
+    random.shuffle(files)
+    train_files = files[:round(len(files) * config.train_size)]
+    test_files = files[round(len(files) * config.train_size):]
+
+    trainer = ProteinNERTrainer(config=config)
 
     trainer.dataset_register(
         data_files=train_files,
-        batch_size=BATCH_SIZE,
+        batch_size=config.batch_size,
         mode=TRAIN_LOADER_TYPE,
+        tokenizer_model_name_or_path=config.model_path_or_name,
+        tokenizer_mode=config.embed_mode,
+        legacy=False,
+        do_lower_case=False
     )
     trainer.dataset_register(
         data_files=test_files,
-        batch_size=BATCH_SIZE,
+        batch_size=config.batch_size,
         mode=TEST_LOADER_TYPE,
+        tokenizer_model_name_or_path=config.model_path_or_name,
+        tokenizer_mode=config.embed_mode,
+        legacy=False,
+        do_lower_case=False
     )
 
     classifier = AminoAcidsNERClassifier(
         input_dims=trainer.embedding_model.get_embedding_dim,
         hidden_dims=1024,
-        num_classes=PFAM_NUM
+        num_classes=config.num_classes
     )
 
     trainer.model_register(model=classifier)
