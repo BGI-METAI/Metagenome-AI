@@ -36,6 +36,15 @@ After that, we focused on the functional annotation of PFAM and GENE3D, combinin
 
 The statistics of the `protein_seq_PFAM_fragment.txt` file are 163,353,266 proteins, 272,102,534 protein fragments (number of file lines), and 20,793 PFAM families. And the statistics of the `protein_seq_GENE3D_fragment.txt` file are 143,196,535 proteins, 266,600,993 protein fragments, and 6,595 GENE3D domains.
 
+**Convert NER labels**  
+
+In order to transform the proteins functional annotation into Named Entity Recognition (NER) task, here we assign functional labels corresponding to each protein in `protein_seq_PFAM_fragment.txt` and `protein_seq_GENE3D_fragment.txt` files with a unique id, and then correspond each amino acid position in the amino acid fragment where the label of each protein is located with a label id to obtain a label id applied to the NER task. 
+
+---
+>The preprocessed data files with GENE3D label is located in `/home/share/huadjyin/home/yinpeng/zkx/data/interpro/fragment_info/GENE3D_seq_fragment_out/`. There are a total of 267 subfiles in this directory, and the header of each file is: protein id `\t` sequence `\t` label. Note that the label id corresponding to each amino acid location is separated by `","`. The 267 files contain a total of 143,196,535 proteins, and each line is a unique protein id.
+>
+>The preprocessed data files with PFAM label is located in `/home/share/huadjyin/home/yinpeng/ljl/data/PFAM_output_1`. Each protein is saved as a `.pkl` file named after the protein ID (sequence, tags, labels).
+
 ## Declaration      
 This is not an official document, please do not distribute it externally.       
             
