@@ -19,7 +19,7 @@ class ProteinNERTrainer(ProteinAnnBaseTrainer):
             data_files,
             *,
             batch_size: int = 1024,
-            mode: Optional[Union[TRAIN_LOADER_TYPE, TEST_LOADER_TYPE]] = TRAIN_LOADER_TYPE,
+            data_type: Optional[Union[TRAIN_LOADER_TYPE, TEST_LOADER_TYPE]] = TRAIN_LOADER_TYPE,
             **kwargs
     ):
         self.batch_size = batch_size
@@ -36,19 +36,14 @@ class ProteinNERTrainer(ProteinAnnBaseTrainer):
             do_lower_case=do_lower_case
         )
 
-        if mode == TRAIN_LOADER_TYPE:
-            train_sampler = torch.utils.data.distributed.DistributedSampler(
-                dataset,
-                # num_replicas=dist.get_world_size(),
-                # rank=dist.get_rank(),
-                # shuffle=False
-            )
+        if data_type == TRAIN_LOADER_TYPE:
+            train_sampler = torch.utils.data.distributed.DistributedSampler(dataset)
             self.train_loader = DataLoader(
                 dataset=dataset,
                 batch_size=batch_size,
                 collate_fn=dataset.collate_fn,
                 sampler=train_sampler)
-        if mode == TEST_LOADER_TYPE:
+        if data_type == TEST_LOADER_TYPE:
             test_sampler = SequentialDistributedSampler(dataset=dataset, batch_size=batch_size)
             self.test_loader = DataLoader(
                 dataset=dataset,
@@ -67,10 +62,10 @@ class ProteinNERTrainer(ProteinAnnBaseTrainer):
                 pooling='all'
             )
         with torch.cuda.amp.autocast():
-            predict = self.model(x_data)
+            predict = self.classifier_model(x_data)
             loss = ProteinLoss.cross_entropy_loss(
                 pred=predict.permute(0, 2, 1),
-                target=batch_label.long().to(self.device),
+                target=batch_label,
                 weight=loss_weight
             )
         return loss

@@ -6,8 +6,6 @@
 # @Email   : zhangchao5@genomics.cn
 import torch
 from typing import Optional, Union
-from torch.nn.parallel import DistributedDataParallel as DDP
-
 from transformers import T5EncoderModel, BertModel, AlbertModel, XLNetModel
 
 from framework.embeddings import Embeddings
@@ -19,7 +17,7 @@ class ProtTransEmbeddings(Embeddings):
     def __init__(
             self,
             model_name_or_path: str,
-            mode: Optional[Union[PROTTRANS_T5_TYPE, PROTTRANS_BERT_TYPE, PROTTRANS_ALBERT_TYPE, PROTTRANS_XLENT_TYPE]],
+            mode_type: Optional[Union[PROTTRANS_T5_TYPE, PROTTRANS_BERT_TYPE, PROTTRANS_ALBERT_TYPE, PROTTRANS_XLENT_TYPE]],
             **kwargs
     ):
         """
@@ -39,26 +37,20 @@ class ProtTransEmbeddings(Embeddings):
             Select the prottrans model to use. Support `PROTTRANS_T5_TYPE`, `PROTTRANS_BERT_TYPE`,
             `PROTTRANS_ALBERT_TYPE`, `PROTTRANS_XLENT_TYPE`
         """
-        local_rank = kwargs.get('local_rank')
-        self.device = torch.device('cuda', local_rank)
 
-        self.mode = mode
-        self.embedding_dims = None
+        self.mode_type = mode_type
 
-        if mode == PROTTRANS_T5_TYPE:
+        if mode_type == PROTTRANS_T5_TYPE:
             self.model = T5EncoderModel.from_pretrained(model_name_or_path)
-        elif mode == PROTTRANS_BERT_TYPE:
+        elif mode_type == PROTTRANS_BERT_TYPE:
             self.model = BertModel.from_pretrained(model_name_or_path)
-        elif mode == PROTTRANS_ALBERT_TYPE:
+        elif mode_type == PROTTRANS_ALBERT_TYPE:
             self.model = AlbertModel.from_pretrained(model_name_or_path)
-        elif mode == PROTTRANS_XLENT_TYPE:
+        elif mode_type == PROTTRANS_XLENT_TYPE:
             self.model = XLNetModel.from_pretrained(model_name_or_path)
         else:
             raise ValueError(
                 "Got an invalid `mode`, only support `PROTTRANS_T5_TYPE`, `PROTTRANS_BERT_TYPE`, `PROTTRANS_ALBERT_TYPE`, `PROTTRANS_XLENT_TYPE`")
-        # self.model.to(self.device)
-        #
-        # self.model = DDP(self.model, device_ids=[local_rank], output_device=local_rank)
         self.model.eval()
 
     @torch.no_grad()
@@ -83,12 +75,12 @@ class ProtTransEmbeddings(Embeddings):
             whether to convert the protein embedding to numpy format
         :return:
         """
-
-        embeddings = self.model(input_ids=input_ids.to(self.device), attention_mask=attention_mask.to(self.device))
+        device = self.model.device
+        embeddings = self.model(input_ids=input_ids.to(device), attention_mask=attention_mask.to(device))
         embeddings = embeddings.last_hidden_state
 
         if pooling == POOLING_CLS_TYPE:
-            if self.mode in [PROTTRANS_BERT_TYPE, PROTTRANS_ALBERT_TYPE]:
+            if self.mode_type in [PROTTRANS_BERT_TYPE, PROTTRANS_ALBERT_TYPE]:
                 result = embeddings[:, 0, :]
             else:
                 raise ValueError(
@@ -109,7 +101,10 @@ class ProtTransEmbeddings(Embeddings):
 
     @property
     def get_embedding_dim(self):
-        if self.mode == PROTTRANS_T5_TYPE:
+        if self.mode_type == PROTTRANS_T5_TYPE:
             return 1024
-        elif self.mode == PROTTRANS_BERT_TYPE:
+        elif self.mode_type == PROTTRANS_BERT_TYPE:
             return 1024
+
+    def to(self, device):
+        self.model.to(device)

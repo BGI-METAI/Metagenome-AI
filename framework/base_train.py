@@ -8,12 +8,14 @@ import os
 import os.path as osp
 # import wandb
 import socket
+import numpy as np
 import random
 import torch
 import torch.distributed as dist
+import torch.backends.cudnn as cudnn
 import pandas as pd
 
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from pathlib import Path
 from typing import Optional, Union
 from datetime import datetime, timedelta
@@ -21,6 +23,7 @@ from torch.utils.data import DataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm
 
+from framework import CLS, EMB
 from framework.classifier import FullLinearClassifier, AminoAcidsNERClassifier
 from framework.dataset import CustomNERDataset
 from framework.prottrans import ProtTransEmbeddings
@@ -32,14 +35,26 @@ VALID_LOADER_TYPE: str = 'valid'
 TEST_LOADER_TYPE: str = 'test'
 
 
-class ProteinAnnBaseTrainer:
+class ProteinAnnBaseTrainer(ABC):
     embedding_model: Embeddings = None
-    model: Optional[Union[FullLinearClassifier, AminoAcidsNERClassifier]] = None
-    device: torch.device = torch.device('cuda')
+    device: torch.device = None
+    classifier_model: Optional[Union[FullLinearClassifier, AminoAcidsNERClassifier]] = None
     train_loader: Optional[Union[DataLoader, CustomNERDataset]] = None
     valid_loader: Optional[Union[DataLoader, CustomNERDataset]] = None
     test_loader: Optional[Union[DataLoader, CustomNERDataset]] = None
     batch_size: int = 1
+
+    @staticmethod
+    def init_seeds(seed, cuda_deterministic=True):
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if cuda_deterministic:  # slower, more reproducible
+            cudnn.deterministic = True
+            cudnn.benchmark = False
+        else:  # faster, less reproducible
+            cudnn.deterministic = False
+            cudnn.benchmark = True
 
     # def wandb_register(
     #         self,
@@ -96,36 +111,28 @@ class ProteinAnnBaseTrainer:
     ):
         """register dataset"""
 
-    def ddp_register(self, rank, world_size):
+    def ddp_register(self):
         """
         Initialize the PyTorch distributed backend. This is essential even for single machine, multiple GPU training
         dist.init_process_group(backend='nccl', init_method='tcp://localhost:FREE_PORT', world_size=1, rank=0).
         The distributed process group contains all the processes that can communicate and synchronize with each other.
-
-        :param rank:
-            Unique identifier of each process
-        :param world_size:
-            Total number of processes
-        :return:
         """
-        port = random.randint(10000, 20000)
-        os.environ["MASTER_ADDR"] = "localhost"
-        os.environ["MASTER_PORT"] = f"{port}"
-
-        torch.cuda.set_device(rank)
         dist.init_process_group(
             backend="nccl",
-            init_method=f'tcp://localhost:{port}',
-            rank=rank,
-            world_size=world_size,
             timeout=timedelta(seconds=30)
         )
+        rank, world_size = dist.get_rank(), dist.get_world_size()
+        device_id = rank % torch.cuda.device_count()
+        self.device = torch.device(device_id)
 
-    def ddp_clean(self):
+    @staticmethod
+    def ddp_clean():
         dist.destroy_process_group()
 
     def model_register(
-            self, model: Optional[Union[FullLinearClassifier, AminoAcidsNERClassifier, ProtTransEmbeddings]],
+            self,
+            model: Optional[Union[FullLinearClassifier, AminoAcidsNERClassifier, ProtTransEmbeddings]],
+            model_type: Optional[Union[CLS, EMB]],
             **kwargs
     ):
         """
@@ -133,11 +140,21 @@ class ProteinAnnBaseTrainer:
 
         :param model:
             protein sequence model
+        :param model_type:
+            model category
         :return:
         """
-        local_rank = kwargs.get('local_rank')
-        device = torch.device('cuda', local_rank)
-        self.model = DDP(model.to(device), device_ids=[local_rank])
+        assert self.device is not None
+
+        if model_type == EMB:
+            self.embedding_model = model
+            self.embedding_model.to(self.device)
+            self.embedding_model.model = DDP(self.embedding_model.model)
+        elif model_type == CLS:
+            self.classifier_model = model.to(self.device)
+            self.classifier_model = DDP(self.classifier_model)
+        else:
+            raise ValueError('Got an invalid model category, only support `CLS` and `EMB`!')
 
     @abstractmethod
     def train_step(self, **kwargs):
@@ -153,10 +170,10 @@ class ProteinAnnBaseTrainer:
             user_name='zhangchao162',
             load_best_model=True,
             **kwargs):
-        optimizer = torch.optim.AdamW(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+        optimizer = torch.optim.AdamW(self.classifier_model.parameters(), lr=learning_rate, weight_decay=weight_decay)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, gamma=0.99)
         scaler = torch.cuda.amp.GradScaler()
-        self.model.train()
+        self.classifier_model.train()
 
         early_stopper = EarlyStopper(patience=patience)
 
@@ -208,14 +225,14 @@ class ProteinAnnBaseTrainer:
 
     def save_ckpt(self, ckpt_home):
         if dist.get_rank() == 0:
-            torch.save(self.model.module.state_dict(),
-                       os.path.join(ckpt_home, f'protein_ann_{self.model.__name__}.bgi'))
+            torch.save(self.classifier_model.module.state_dict(),
+                       os.path.join(ckpt_home, f'protein_ann_{self.classifier_model.__name__}.bgi'))
 
     def load_ckpt(self, ckpt_home):
         checkpoint = torch.load(
-            os.path.join(ckpt_home, f'protein_ann_{self.model.__name__}.bgi'),
+            os.path.join(ckpt_home, f'protein_ann_{self.classifier_model.__name__}.bgi'),
             map_location=lambda storage, loc: storage)
-        state_dict = self.model.module.state_dict()
+        state_dict = self.classifier_model.module.state_dict()
         trained_dict = {k: v for k, v in checkpoint.items() if k in state_dict}
         state_dict.update(trained_dict)
-        self.model.module.load_state_dict(state_dict)
+        self.classifier_model.module.load_state_dict(state_dict)

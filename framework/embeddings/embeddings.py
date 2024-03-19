@@ -18,3 +18,7 @@ class Embeddings(ABC):
     @abstractmethod
     def get_embedding_dim(self, **kwargs) -> int:
         """Obtain the protein sequence embedding dimension of pLMs."""
+
+    @abstractmethod
+    def to(self, device):
+        """transfer model to device"""

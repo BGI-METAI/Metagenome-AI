@@ -13,7 +13,7 @@ class ParseConfig:
         parser.add_argument(
             '--data_path',
             type=str,
-            default='/home/share/huadjyin/home/s_cenweixuan/dataset/pfam/sub_pfam',
+            default='/jdfssz1/ST_BIOINTEL/P20Z10200N0157/Bioinformatic_Frontier_Algorithms/05.user/zhangchao5/metageome/dataset/sub_pfam',
             help='the path of input dataset'
         )
         parser.add_argument(
@@ -26,7 +26,7 @@ class ParseConfig:
         parser.add_argument(
             '--model_path_or_name',
             type=str,
-            default='/home/share/huadjyin/home/s_cenweixuan/weight/prot_t5_xl_half_uniref50-enc',
+            default='/jdfssz1/ST_BIOINTEL/P20Z10200N0157/Bioinformatic_Frontier_Algorithms/05.user/zhangchao5/metageome/weight/prot_t5_xl_half_uniref50-enc',
             help='pretrianed model path or name'
         )
         parser.add_argument('--embed_mode', type=str, default='t5', help='which embedding model to be choose,  support `t5`, `bert`, `albert`')
@@ -34,11 +34,8 @@ class ParseConfig:
         parser.add_argument('--legacy', type=bool, default=False, help='parameter of pretrained pLMs tokenizer')
 
         parser.add_argument('--train_size', type=float, default=0.7, help='the size of training dataset')
-        parser.add_argument('--batch_size', type=int, default=1, help='batch size')
+        parser.add_argument('--batch_size', type=int, default=2, help='batch size')
         parser.add_argument('--num_classes', type=int, default=20794, help='the number of categories')
-
-        parser.add_argument('--local_rank', type=int, default=0, help='Rank of the current process (it should be a number between 0 and ``world_size``-1).')
-        # parser.add_argument('--world_size', type=int, default=4, help='parameter of initialize DDP')
 
         return parser.parse_args()
 
