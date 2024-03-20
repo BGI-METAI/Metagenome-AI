@@ -20,5 +20,5 @@ class Embeddings(ABC):
         """Obtain the protein sequence embedding dimension of pLMs."""
 
     @abstractmethod
-    def to(self, device):
-        """transfer model to device"""
+    def cuda(self):
+        """transfer model to cuda device"""
