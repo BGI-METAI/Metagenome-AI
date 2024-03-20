@@ -43,6 +43,7 @@ class ParseConfig:
         parser.add_argument('--loss_weight', type=float, default=1.)
         parser.add_argument('--patience', type=int, default=10)
         parser.add_argument('--load_best_model', type=bool, default=True)
+        parser.add_argument('--reuse', type=bool, default=False)
 
         parser.add_argument('--user_name', type=str, default='zhangchao162', help='wandb register parameter')
 

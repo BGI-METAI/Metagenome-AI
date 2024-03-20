@@ -57,7 +57,7 @@ if __name__ == '__main__':
         local_rank=local_rank
     )
 
-    # nstantiate and register classifier model
+    # instantiate and register classifier model
     classifier_model = AminoAcidsNERClassifier(
         input_dims=trainer.embedding_model.get_embedding_dim,
         num_classes=config.num_classes

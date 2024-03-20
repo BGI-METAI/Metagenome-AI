@@ -15,10 +15,14 @@ import torch.distributed as dist
 import torch.backends.cudnn as cudnn
 import pandas as pd
 
+from sklearn import metrics
 from abc import abstractmethod, ABC
 from pathlib import Path
 from typing import Optional, Union
 from datetime import datetime, timedelta
+
+from torch.optim.lr_scheduler import LRScheduler
+from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm
@@ -38,10 +42,16 @@ TEST_LOADER_TYPE: str = 'test'
 class ProteinAnnBaseTrainer(ABC):
     embedding_model: Embeddings = None
     classifier_model: Optional[Union[FullLinearClassifier, AminoAcidsNERClassifier]] = None
+    optimizer: Optimizer = None
+    scheduler: LRScheduler = None
     train_loader: Optional[Union[DataLoader, CustomNERDataset]] = None
     valid_loader: Optional[Union[DataLoader, CustomNERDataset]] = None
     test_loader: Optional[Union[DataLoader, CustomNERDataset]] = None
     batch_size: int = 1
+
+    def __init__(self, config, **kwargs):
+        self.ckpt_home = osp.join(config.output_home, 'ckpt')
+        Path(self.ckpt_home).mkdir(parents=True, exist_ok=True)
 
     @staticmethod
     def init_seeds(seed, cuda_deterministic=True):
@@ -142,13 +152,17 @@ class ProteinAnnBaseTrainer(ABC):
         :return:
         """
         local_rank = kwargs.get('local_rank')
+        reuse = kwargs.get('reuse')
 
         if model_type == EMB:
             self.embedding_model = model
             self.embedding_model.cuda()
             # self.embedding_model.model = DDP(self.embedding_model.model, device_ids=[local_rank], output_device=local_rank)
         elif model_type == CLS:
-            self.classifier_model = model.cuda()
+            if not reuse:
+                self.classifier_model = model.cuda()
+            else:
+                self.load_ckpt(ckpt_home=self.ckpt_home, reuse=True)
             self.classifier_model = DDP(self.classifier_model, device_ids=[local_rank], output_device=local_rank)
         else:
             raise ValueError('Got an invalid model category, only support `CLS` and `EMB`!')
@@ -158,19 +172,16 @@ class ProteinAnnBaseTrainer(ABC):
         """"""
 
     def train(self, config):
-        optimizer = torch.optim.AdamW(
+        self.optimizer = torch.optim.AdamW(
             self.classifier_model.parameters(),
             lr=config.learning_rate,
             weight_decay=config.weight_decay
         )
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, gamma=0.99)
+        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, 1, gamma=0.99)
         scaler = torch.cuda.amp.GradScaler()
         self.classifier_model.train()
 
         early_stopper = EarlyStopper(patience=config.patience)
-
-        ckpt_home = osp.join(config.output_home, 'ckpt')
-        Path(ckpt_home).mkdir(parents=True, exist_ok=True)
 
         # self.wandb_register(
         #     user_name,
@@ -193,33 +204,45 @@ class ProteinAnnBaseTrainer(ABC):
                 eph_loss += loss.item()
                 batch_iterator.set_postfix({'Loss': f'{loss.item():.4f}'})
                 # wandb.log({'loss': loss.item()})
-                optimizer.zero_grad()
+                self.optimizer.zero_grad()
                 scaler.scale(loss).backward()
-                scaler.step(optimizer)
+                scaler.step(self.optimizer)
                 scaler.update()
-            scheduler.step()
+            self.scheduler.step()
             if early_stopper.counter == 0:
-                self.save_ckpt(ckpt_home=ckpt_home)
+                self.save_ckpt(ckpt_home=self.ckpt_home)
             if early_stopper(eph_loss):
                 print(f"{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')} Model Training Finished!")
-                print(f'`ckpt` file has saved in {ckpt_home}')
+                print(f'`ckpt` file has saved in {self.ckpt_home}')
                 if config.load_best_model:
-                    self.load_ckpt(ckpt_home=ckpt_home)
+                    self.load_ckpt(ckpt_home=self.ckpt_home, reuse=False)
                 break
 
     def save_ckpt(self, ckpt_home):
         if dist.get_rank() == 0:
-            torch.save(self.classifier_model.module.state_dict(),
+            save_dict = {
+                'state_dict': self.classifier_model.module.state_dict(),
+                'optimizer': self.optimizer.state_dict(),
+                'lr_schedule': self.scheduler.state_dict()
+            }
+            torch.save(save_dict,
                        os.path.join(ckpt_home, f'protein_ann_{self.classifier_model.__name__}.bgi'))
 
-    def load_ckpt(self, ckpt_home):
-        checkpoint = torch.load(
-            os.path.join(ckpt_home, f'protein_ann_{self.classifier_model.__name__}.bgi'),
-            map_location=lambda storage, loc: storage)
+    def load_ckpt(self, ckpt_home, reuse=False):
+        checkpoint = torch.load(os.path.join(ckpt_home, f'protein_ann_{self.classifier_model.__name__}.bgi'))
         state_dict = self.classifier_model.module.state_dict()
-        trained_dict = {k: v for k, v in checkpoint.items() if k in state_dict}
+        trained_dict = {k: v for k, v in checkpoint['state_dict'].items() if k in state_dict}
         state_dict.update(trained_dict)
         self.classifier_model.module.load_state_dict(state_dict)
+        if reuse:
+            self.optimizer.load_state_dict(checkpoint['optimizer'])
+            self.scheduler.load_state_dict(checkpoint['lr_schedule'])
 
-    def metric_score(self, inputs, label):
-        pass
+    @staticmethod
+    def metric_score(inputs, label):
+        accuracy = metrics.accuracy_score(label, inputs)
+        precision = metrics.precision_score(label, inputs, average='macro')
+        recall = metrics.recall_score(label, inputs, average='macro')
+        f1 = metrics.f1_score(label, inputs, average='macro')
+        return accuracy, precision, recall, f1
+
