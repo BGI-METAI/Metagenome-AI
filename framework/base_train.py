@@ -37,7 +37,6 @@ TEST_LOADER_TYPE: str = 'test'
 
 class ProteinAnnBaseTrainer(ABC):
     embedding_model: Embeddings = None
-    device: torch.device = None
     classifier_model: Optional[Union[FullLinearClassifier, AminoAcidsNERClassifier]] = None
     train_loader: Optional[Union[DataLoader, CustomNERDataset]] = None
     valid_loader: Optional[Union[DataLoader, CustomNERDataset]] = None
@@ -111,19 +110,17 @@ class ProteinAnnBaseTrainer(ABC):
     ):
         """register dataset"""
 
-    def ddp_register(self):
+    def ddp_register(self, local_rank):
         """
         Initialize the PyTorch distributed backend. This is essential even for single machine, multiple GPU training
         dist.init_process_group(backend='nccl', init_method='tcp://localhost:FREE_PORT', world_size=1, rank=0).
         The distributed process group contains all the processes that can communicate and synchronize with each other.
         """
+        torch.cuda.set_device(local_rank)
         dist.init_process_group(
             backend="nccl",
             timeout=timedelta(seconds=30)
         )
-        rank, world_size = dist.get_rank(), dist.get_world_size()
-        device_id = rank % torch.cuda.device_count()
-        self.device = torch.device(device_id)
 
     @staticmethod
     def ddp_clean():
@@ -144,15 +141,15 @@ class ProteinAnnBaseTrainer(ABC):
             model category
         :return:
         """
-        assert self.device is not None
+        local_rank = kwargs.get('local_rank')
 
         if model_type == EMB:
             self.embedding_model = model
-            self.embedding_model.to(self.device)
-            self.embedding_model.model = DDP(self.embedding_model.model)
+            self.embedding_model.cuda()
+            # self.embedding_model.model = DDP(self.embedding_model.model, device_ids=[local_rank], output_device=local_rank)
         elif model_type == CLS:
-            self.classifier_model = model.to(self.device)
-            self.classifier_model = DDP(self.classifier_model)
+            self.classifier_model = model.cuda()
+            self.classifier_model = DDP(self.classifier_model, device_ids=[local_rank], output_device=local_rank)
         else:
             raise ValueError('Got an invalid model category, only support `CLS` and `EMB`!')
 
@@ -160,26 +157,19 @@ class ProteinAnnBaseTrainer(ABC):
     def train_step(self, **kwargs):
         """"""
 
-    def train(
-            self,
-            max_epoch=100,
-            learning_rate=3e-5,
-            weight_decay=5e-4,
-            patience=10,
-            *,
-            user_name='zhangchao162',
-            load_best_model=True,
-            **kwargs):
-        optimizer = torch.optim.AdamW(self.classifier_model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    def train(self, config):
+        optimizer = torch.optim.AdamW(
+            self.classifier_model.parameters(),
+            lr=config.learning_rate,
+            weight_decay=config.weight_decay
+        )
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, gamma=0.99)
         scaler = torch.cuda.amp.GradScaler()
         self.classifier_model.train()
 
-        early_stopper = EarlyStopper(patience=patience)
+        early_stopper = EarlyStopper(patience=config.patience)
 
-        loss_weight = kwargs.get('loss_weight', 1.)
-        output_home = kwargs.get('output_home', './protein_anno_NER')
-        ckpt_home = osp.join(output_home, 'ckpt')
+        ckpt_home = osp.join(config.output_home, 'ckpt')
         Path(ckpt_home).mkdir(parents=True, exist_ok=True)
 
         # self.wandb_register(
@@ -194,20 +184,14 @@ class ProteinAnnBaseTrainer(ABC):
         #     'batch_size': self.batch_size,
         #     'loss_weight': loss_weight})
 
-        for eph in range(max_epoch):
+        for eph in range(config.max_epoch):
             eph_loss = 0
             self.train_loader.sampler.set_epoch(eph)
-            batch_iterator = tqdm(self.train_loader, desc=f'Processing epoch: {eph:03d}')
+            batch_iterator = tqdm(self.train_loader, desc=f'Eph: {eph:03d}')
             for sample in batch_iterator:
-                loss = self.train_step(sample=sample)
-                # x_data = x_data.to(self.device)
-                # y_target = y_target.to(self.device)
-                #
-                # with torch.cuda.amp.autocast():
-                #     predict = self.model(x_data)
-                #     loss = ProteinLoss.cross_entropy_loss(pred=predict, target=y_target, weight=loss_weight)
+                loss = self.train_step(sample=sample, loss_weight=config.loss_weight)
                 eph_loss += loss.item()
-                batch_iterator.set_postfix({'Training loss': f'{loss.item():.4f}'})
+                batch_iterator.set_postfix({'Loss': f'{loss.item():.4f}'})
                 # wandb.log({'loss': loss.item()})
                 optimizer.zero_grad()
                 scaler.scale(loss).backward()
@@ -219,7 +203,7 @@ class ProteinAnnBaseTrainer(ABC):
             if early_stopper(eph_loss):
                 print(f"{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')} Model Training Finished!")
                 print(f'`ckpt` file has saved in {ckpt_home}')
-                if load_best_model:
+                if config.load_best_model:
                     self.load_ckpt(ckpt_home=ckpt_home)
                 break
 
@@ -236,3 +220,6 @@ class ProteinAnnBaseTrainer(ABC):
         trained_dict = {k: v for k, v in checkpoint.items() if k in state_dict}
         state_dict.update(trained_dict)
         self.classifier_model.module.load_state_dict(state_dict)
+
+    def metric_score(self, inputs, label):
+        pass
