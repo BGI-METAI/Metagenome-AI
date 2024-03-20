@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # @Time    : 3/13/24 2:09 PM
 # @Author  : zhangchao
-# @File    : train_prottrans_ner_model.py
+# @File    : demo_ner_train.py
 # @Email   : zhangchao5@genomics.cn
 import os
 import os.path as osp
@@ -18,6 +18,7 @@ if __name__ == '__main__':
 
     # loading hyper-parameters
     config = ParseConfig.register_parameters()
+    local_rank=int(os.environ["LOCAL_RANK"])
 
     # prepare dataset
     files = [osp.join(config.data_path, f) for f in os.listdir(config.data_path) if f.endswith('pkl')]
@@ -30,7 +31,7 @@ if __name__ == '__main__':
     trainer = ProteinNERTrainer()
 
     # register and initialize DDP
-    trainer.ddp_register()
+    trainer.ddp_register(local_rank=local_rank)
     rank = dist.get_rank()
     trainer.init_seeds(seed=rank + 1)
 
@@ -53,17 +54,18 @@ if __name__ == '__main__':
     trainer.model_register(
         model=embedding_model,
         model_type='emb',
+        local_rank=local_rank
     )
 
     # nstantiate and register classifier model
     classifier_model = AminoAcidsNERClassifier(
         input_dims=trainer.embedding_model.get_embedding_dim,
-        hidden_dims=1024,
         num_classes=config.num_classes
     )
     trainer.model_register(
         model=classifier_model,
         model_type='cls',
+        local_rank=local_rank
     )
 
-    trainer.train()
+    trainer.train(config)

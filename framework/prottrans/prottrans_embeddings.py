@@ -75,8 +75,7 @@ class ProtTransEmbeddings(Embeddings):
             whether to convert the protein embedding to numpy format
         :return:
         """
-        device = self.model.device
-        embeddings = self.model(input_ids=input_ids.to(device), attention_mask=attention_mask.to(device))
+        embeddings = self.model(input_ids=input_ids.cuda(), attention_mask=attention_mask.cuda())
         embeddings = embeddings.last_hidden_state
 
         if pooling == POOLING_CLS_TYPE:
@@ -94,6 +93,9 @@ class ProtTransEmbeddings(Embeddings):
         else:
             raise ValueError('Invalid output!')
 
+        del embeddings, input_ids, attention_mask
+        torch.cuda.empty_cache()
+
         if convert2numpy:
             return result.detach().cpu().numpy()
         else:
@@ -106,5 +108,5 @@ class ProtTransEmbeddings(Embeddings):
         elif self.mode_type == PROTTRANS_BERT_TYPE:
             return 1024
 
-    def to(self, device):
-        self.model.to(device)
+    def cuda(self):
+        self.model.cuda()

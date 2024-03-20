@@ -63,10 +63,20 @@ class ProteinNERTrainer(ProteinAnnBaseTrainer):
             )
         with torch.cuda.amp.autocast():
             predict = self.classifier_model(x_data)
-            loss = ProteinLoss.cross_entropy_loss(
+            # loss = ProteinLoss.cross_entropy_loss(
+            #     pred=predict.permute(0, 2, 1),
+            #     target=batch_label,
+            #     weight=loss_weight
+            # )
+            loss = ProteinLoss.focal_loss(
                 pred=predict.permute(0, 2, 1),
                 target=batch_label,
-                weight=loss_weight
+                weight=loss_weight,
+                gamma=2.
             )
+
+        del x_data, predict
+        torch.cuda.empty_cache()
+
         return loss
 

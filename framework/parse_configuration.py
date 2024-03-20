@@ -13,7 +13,7 @@ class ParseConfig:
         parser.add_argument(
             '--data_path',
             type=str,
-            default='/jdfssz1/ST_BIOINTEL/P20Z10200N0157/Bioinformatic_Frontier_Algorithms/05.user/zhangchao5/metageome/dataset/sub_pfam',
+            default='/jdfssz1/ST_BIOINTEL/P20Z10200N0157/Bioinformatic_Frontier_Algorithms/05.user/zhangchao5/metageome/dataset/gene3d_pkls',
             help='the path of input dataset'
         )
         parser.add_argument(
@@ -35,7 +35,16 @@ class ParseConfig:
 
         parser.add_argument('--train_size', type=float, default=0.7, help='the size of training dataset')
         parser.add_argument('--batch_size', type=int, default=2, help='batch size')
-        parser.add_argument('--num_classes', type=int, default=20794, help='the number of categories')
+        parser.add_argument('--num_classes', type=int, default=6595, help='the number of categories')  # PFAM: 20794, GENE3D: 6595
+
+        parser.add_argument('--max_epoch', type=int, default=100)
+        parser.add_argument('--learning_rate', type=float, default=1e-4)
+        parser.add_argument('--weight_decay', type=float, default=5e-4)
+        parser.add_argument('--loss_weight', type=float, default=1.)
+        parser.add_argument('--patience', type=int, default=10)
+        parser.add_argument('--load_best_model', type=bool, default=True)
+
+        parser.add_argument('--user_name', type=str, default='zhangchao162', help='wandb register parameter')
 
         return parser.parse_args()
 
