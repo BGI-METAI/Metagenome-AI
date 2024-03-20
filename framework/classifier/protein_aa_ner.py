@@ -9,20 +9,12 @@ from framework.classifier.linear_layer_module import LinearLayerModule
 
 
 class AminoAcidsNERClassifier(nn.Module):
-    def __init__(self, input_dims, hidden_dims, num_classes):
+    def __init__(self, input_dims, num_classes):
         super(AminoAcidsNERClassifier, self).__init__()
-        self.layer = LinearLayerModule(
-            input_dims=input_dims,
-            output_dims=hidden_dims,
-            add_bias=True,
-            is_bn=True,
-            is_act=True,
-            drop_rate=0.2
-        )
         self.classifier_layer = LinearLayerModule(
-            input_dims=hidden_dims,
+            input_dims=input_dims,
             output_dims=num_classes,
-            add_bias=True,
+            add_bias=False,
             is_bn=False,
             is_act=False,
             drop_rate=None
