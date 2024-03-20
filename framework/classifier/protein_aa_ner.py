@@ -21,5 +21,5 @@ class AminoAcidsNERClassifier(nn.Module):
         )
 
     def forward(self, x):
-        return self.classifier_layer(self.layer(x))
+        return self.classifier_layer(x)
 
