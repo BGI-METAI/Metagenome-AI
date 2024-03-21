@@ -6,7 +6,7 @@
 # @Email   : zhangchao5@genomics.cn
 import os
 import os.path as osp
-# import wandb
+import wandb
 import socket
 import numpy as np
 import random
@@ -65,49 +65,49 @@ class ProteinAnnBaseTrainer(ABC):
             cudnn.deterministic = False
             cudnn.benchmark = True
 
-    # def wandb_register(
-    #         self,
-    #         user_name: str,
-    #         project: str = 'protein function annotation',
-    #         group: str = 'classifier',
-    #         model_folder: str = '.',
-    #         timestamp: str = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
-    # ):
-    #     """
-    #     register wandb to ProteintTrainer
-    #
-    #     :param user_name:
-    #         username or team name where you're sending runs.
-    #         This entity must exist before you can send runs there,
-    #         so make sure to create your account or team in the UI before starting to log runs.
-    #         If you don't specify an entity, the run will be sent to your default entity,
-    #         which is usually your username. Change your default entity in [your settings](https://wandb.ai/settings)
-    #         under "default location to create new projects".
-    #     :param project:
-    #         The name of the project where you're sending the new run. If the project is not specified, the run is put in an "Uncategorized" project.
-    #     :param group:
-    #         Specify a group to organize individual runs into a larger experiment.
-    #         For example, you might be doing cross validation, or you might have multiple jobs that train and evaluate
-    #         a model against different test sets. Group gives you a way to organize runs together into a larger whole, and you can toggle this
-    #         on and off in the UI. For more details, see our [guide to grouping runs](https://docs.wandb.com/guides/runs/grouping).
-    #     :param model_folder:
-    #         wandb ouput file save path
-    #     :param timestamp:
-    #     :return:
-    #     """
-    #     wandb_output_dir = osp.join(model_folder, 'wandb_home')
-    #     Path(wandb_output_dir).mkdir(parents=True, exist_ok=True)
-    #     wandb.init(
-    #         project=project,
-    #         entity=user_name,
-    #         notes=socket.gethostname(),
-    #         name=f'prot_func_anno_{timestamp}',
-    #         group=group,
-    #         dir=wandb_output_dir,
-    #         job_type='training',
-    #         reinit=True
-    #     )
-    #     wandb.watch(self.model, log='all')
+    def wandb_register(
+            self,
+            user_name: str,
+            project: str = 'protein function annotation',
+            group: str = 'classifier',
+            model_folder: str = '.',
+            timestamp: str = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+    ):
+        """
+        register wandb to ProteintTrainer
+
+        :param user_name:
+            username or team name where you're sending runs.
+            This entity must exist before you can send runs there,
+            so make sure to create your account or team in the UI before starting to log runs.
+            If you don't specify an entity, the run will be sent to your default entity,
+            which is usually your username. Change your default entity in [your settings](https://wandb.ai/settings)
+            under "default location to create new projects".
+        :param project:
+            The name of the project where you're sending the new run. If the project is not specified, the run is put in an "Uncategorized" project.
+        :param group:
+            Specify a group to organize individual runs into a larger experiment.
+            For example, you might be doing cross validation, or you might have multiple jobs that train and evaluate
+            a model against different test sets. Group gives you a way to organize runs together into a larger whole, and you can toggle this
+            on and off in the UI. For more details, see our [guide to grouping runs](https://docs.wandb.com/guides/runs/grouping).
+        :param model_folder:
+            wandb ouput file save path
+        :param timestamp:
+        :return:
+        """
+        wandb_output_dir = osp.join(model_folder, 'wandb_home')
+        Path(wandb_output_dir).mkdir(parents=True, exist_ok=True)
+        wandb.init(
+            project=project,
+            entity=user_name,
+            notes=socket.gethostname(),
+            name=f'prot_func_anno_{timestamp}',
+            group=group,
+            dir=wandb_output_dir,
+            job_type='training',
+            reinit=True
+        )
+        wandb.watch(self.model, log='all')
 
     @abstractmethod
     def dataset_register(
@@ -120,7 +120,8 @@ class ProteinAnnBaseTrainer(ABC):
     ):
         """register dataset"""
 
-    def ddp_register(self, local_rank):
+    @staticmethod
+    def ddp_register(local_rank):
         """
         Initialize the PyTorch distributed backend. This is essential even for single machine, multiple GPU training
         dist.init_process_group(backend='nccl', init_method='tcp://localhost:FREE_PORT', world_size=1, rank=0).
@@ -129,6 +130,9 @@ class ProteinAnnBaseTrainer(ABC):
         torch.cuda.set_device(local_rank)
         dist.init_process_group(
             backend="nccl",
+            # init_method=f"tcp://{os.environ['MASTER_ADDR']}:{os.environ['MASTER_PORT']}",
+            # rank=local_rank,
+            # world_size=dist.get_world_size(),
             timeout=timedelta(seconds=30)
         )
 
@@ -169,7 +173,11 @@ class ProteinAnnBaseTrainer(ABC):
 
     @abstractmethod
     def train_step(self, **kwargs):
-        """"""
+        """each step to train the model."""
+
+    @abstractmethod
+    def valid_step(self, **kwargs):
+        """validate the model every step of the way."""
 
     def train(self, config):
         self.optimizer = torch.optim.AdamW(
@@ -179,44 +187,75 @@ class ProteinAnnBaseTrainer(ABC):
         )
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, 1, gamma=0.99)
         scaler = torch.cuda.amp.GradScaler()
-        self.classifier_model.train()
 
         early_stopper = EarlyStopper(patience=config.patience)
 
-        # self.wandb_register(
-        #     user_name,
-        #     project='proteinNER',
-        #     model_folder=output_home
-        # )
+        self.wandb_register(
+            config.user_name,
+            project='proteinNER',
+            model_folder=config.output_home
+        )
 
-        # wandb.config({
-        #     'learning_rate': learning_rate,
-        #     'max_epoch': max_epoch,
-        #     'batch_size': self.batch_size,
-        #     'loss_weight': loss_weight})
+        wandb.config({
+            'learning_rate': config.learning_rate,
+            'max_epoch': config.max_epoch,
+            'batch_size': self.batch_size,
+            'loss_weight': config.loss_weight})
 
         for eph in range(config.max_epoch):
-            eph_loss = 0
+            eph_loss = []
+            self.classifier_model.train()
             self.train_loader.sampler.set_epoch(eph)
             batch_iterator = tqdm(self.train_loader, desc=f'Eph: {eph:03d}')
             for sample in batch_iterator:
                 loss = self.train_step(sample=sample, loss_weight=config.loss_weight)
-                eph_loss += loss.item()
-                batch_iterator.set_postfix({'Loss': f'{loss.item():.4f}'})
-                # wandb.log({'loss': loss.item()})
+
+                # print(f' device: {dist.get_rank()} '.center(100, '*'))
+                # print(f'loss: {loss.item()}')
+                # print(f''.center(100, '*'))
+
+
+                # if dist.get_rank() == 0:
+                #     dist.barrier()
+                dist.barrier()
+                gather_loss = [torch.zeros_like(loss) for _ in range(dist.get_world_size())]
+                dist.all_gather(gather_loss, loss)
+                gathered_mean_loss = torch.stack(gather_loss).mean().item()
+                batch_iterator.set_postfix({'Loss': f'{gathered_mean_loss:.4f}'})
+                eph_loss.append(gathered_mean_loss)
+                wandb.log({'loss': gathered_mean_loss})
+
                 self.optimizer.zero_grad()
                 scaler.scale(loss).backward()
                 scaler.step(self.optimizer)
                 scaler.update()
             self.scheduler.step()
-            if early_stopper.counter == 0:
-                self.save_ckpt(ckpt_home=self.ckpt_home)
-            if early_stopper(eph_loss):
+
+            with torch.no_grad():
+                self.classifier_model.eval()
+                all_accuracy = []
+                for sample in self.test_loader:
+                    accuracy = self.valid_step(sample=sample)
+
+                    # if dist.get_rank() == 0:
+                    #     dist.barrier()
+                    dist.barrier()
+                    gathered_acc = [torch.zeros_like(accuracy) for _ in range(dist.get_world_size())]
+                    dist.all_gather(gathered_acc, accuracy)
+                    gathered_mean_acc = torch.stack(gathered_acc).mean().item()
+                    all_accuracy.append(gathered_mean_acc)
+
+                wandb.log({'validation accuracy': np.mean(all_accuracy)})
+
+            if early_stopper(np.mean(eph_loss)):
                 print(f"{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')} Model Training Finished!")
                 print(f'`ckpt` file has saved in {self.ckpt_home}')
                 if config.load_best_model:
                     self.load_ckpt(ckpt_home=self.ckpt_home, reuse=False)
                 break
+            elif early_stopper.counter == 0:
+                self.save_ckpt(ckpt_home=self.ckpt_home)
+
 
     def save_ckpt(self, ckpt_home):
         if dist.get_rank() == 0:
@@ -226,10 +265,11 @@ class ProteinAnnBaseTrainer(ABC):
                 'lr_schedule': self.scheduler.state_dict()
             }
             torch.save(save_dict,
-                       os.path.join(ckpt_home, f'protein_ann_{self.classifier_model.__name__}.bgi'))
+                       os.path.join(ckpt_home, f'protein_ann_{self.classifier_model.module.__class__.__name__}.pth'))
 
     def load_ckpt(self, ckpt_home, reuse=False):
-        checkpoint = torch.load(os.path.join(ckpt_home, f'protein_ann_{self.classifier_model.__name__}.bgi'))
+        checkpoint = torch.load(
+            os.path.join(ckpt_home, f'protein_ann_{self.classifier_model.module.__class__.__name__}.pth'))
         state_dict = self.classifier_model.module.state_dict()
         trained_dict = {k: v for k, v in checkpoint['state_dict'].items() if k in state_dict}
         state_dict.update(trained_dict)
@@ -245,4 +285,3 @@ class ProteinAnnBaseTrainer(ABC):
         recall = metrics.recall_score(label, inputs, average='macro')
         f1 = metrics.f1_score(label, inputs, average='macro')
         return accuracy, precision, recall, f1
-

@@ -5,6 +5,7 @@
 # @File    : train.py
 # @Email   : zhangchao5@genomics.cn
 import torch
+import torch.distributed as dist
 from typing import Optional, Union
 from torch.utils.data import DataLoader
 
@@ -79,4 +80,23 @@ class ProteinNERTrainer(ProteinAnnBaseTrainer):
         torch.cuda.empty_cache()
 
         return loss
+
+    @torch.no_grad()
+    def valid_step(self, sample, **kwargs):
+        input_ids, attention_mask, batch_label = sample
+        x_data = self.embedding_model.get_embedding(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            pooling='all'
+        )
+
+        logist = self.classifier_model(x_data)
+        pred = torch.nn.functional.softmax(logist, dim=-1).argmax(-1)
+        accuracy = torch.eq(pred, batch_label).float().mean()
+
+        del x_data, logist, pred
+        torch.cuda.empty_cache()
+
+        return accuracy
+
 

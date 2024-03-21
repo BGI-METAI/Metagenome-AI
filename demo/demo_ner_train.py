@@ -8,13 +8,16 @@ import os
 import os.path as osp
 import random
 import torch.distributed as dist
+from warnings import filterwarnings
 from framework import ProteinNERTrainer, ParseConfig
 from framework.classifier import AminoAcidsNERClassifier
 from framework.base_train import TRAIN_LOADER_TYPE
 from framework.prottrans import ProtTransEmbeddings
 
+filterwarnings('ignore')
+
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "3,4,5,6,7"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
 
     # loading hyper-parameters
     config = ParseConfig.register_parameters()
@@ -28,7 +31,7 @@ if __name__ == '__main__':
     test_files = files[round(len(files) * config.train_size):]
 
     # initialize trainer class
-    trainer = ProteinNERTrainer()
+    trainer = ProteinNERTrainer(config)
 
     # register and initialize DDP
     trainer.ddp_register(local_rank=local_rank)

@@ -13,20 +13,23 @@ class ParseConfig:
         parser.add_argument(
             '--data_path',
             type=str,
-            default='/jdfssz1/ST_BIOINTEL/P20Z10200N0157/Bioinformatic_Frontier_Algorithms/05.user/zhangchao5/metageome/dataset/gene3d_pkls',
+            # default='/jdfssz1/ST_BIOINTEL/P20Z10200N0157/Bioinformatic_Frontier_Algorithms/05.user/zhangchao5/metageome/dataset/gene3d_pkls',
+            default='/home/share/huadjyin/home/s_cenweixuan/dataset/pfam/sub_pfam',
             help='the path of input dataset'
         )
         parser.add_argument(
             '--output_home',
             type=str,
-            default='./output/protein_anno_NER'
+            # default='/jdfssz1/ST_BIOINTEL/P20Z10200N0157/Bioinformatic_Frontier_Algorithms/05.user/zhangchao5/metageome/codes/output',
+            default='/home/share/huadjyin/home/s_cenweixuan/codes/metageome/output',
         )
         parser.add_argument('--seed', type=int, default=42, help='random seed')
 
         parser.add_argument(
             '--model_path_or_name',
             type=str,
-            default='/jdfssz1/ST_BIOINTEL/P20Z10200N0157/Bioinformatic_Frontier_Algorithms/05.user/zhangchao5/metageome/weight/prot_t5_xl_half_uniref50-enc',
+            # default='/jdfssz1/ST_BIOINTEL/P20Z10200N0157/Bioinformatic_Frontier_Algorithms/05.user/zhangchao5/metageome/weight/prot_t5_xl_half_uniref50-enc',
+            default='/home/share/huadjyin/home/s_cenweixuan/weight/prot_t5_xl_half_uniref50-enc',
             help='pretrianed model path or name'
         )
         parser.add_argument('--embed_mode', type=str, default='t5', help='which embedding model to be choose,  support `t5`, `bert`, `albert`')
@@ -34,8 +37,8 @@ class ParseConfig:
         parser.add_argument('--legacy', type=bool, default=False, help='parameter of pretrained pLMs tokenizer')
 
         parser.add_argument('--train_size', type=float, default=0.7, help='the size of training dataset')
-        parser.add_argument('--batch_size', type=int, default=2, help='batch size')
-        parser.add_argument('--num_classes', type=int, default=6595, help='the number of categories')  # PFAM: 20794, GENE3D: 6595
+        parser.add_argument('--batch_size', type=int, default=4, help='batch size')
+        parser.add_argument('--num_classes', type=int, default=20794, help='the number of categories')  # PFAM: 20794, GENE3D: 6595
 
         parser.add_argument('--max_epoch', type=int, default=100)
         parser.add_argument('--learning_rate', type=float, default=1e-4)
