@@ -5,7 +5,6 @@
 # @File    : train.py
 # @Email   : zhangchao5@genomics.cn
 import torch
-import torch.distributed as dist
 from typing import Optional, Union
 from torch.utils.data import DataLoader
 
