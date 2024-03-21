@@ -47,11 +47,20 @@ class ProteinAnnBaseTrainer(ABC):
     train_loader: Optional[Union[DataLoader, CustomNERDataset]] = None
     valid_loader: Optional[Union[DataLoader, CustomNERDataset]] = None
     test_loader: Optional[Union[DataLoader, CustomNERDataset]] = None
-    batch_size: int = 1
 
     def __init__(self, config, **kwargs):
         self.ckpt_home = osp.join(config.output_home, 'ckpt')
         Path(self.ckpt_home).mkdir(parents=True, exist_ok=True)
+
+        # register DDP
+        self.local_rank = int(os.environ['LOCAL_RANK'])
+        torch.cuda.set_device(self.local_rank)
+        dist.init_process_group(
+            backend="nccl",
+            timeout=timedelta(seconds=30)
+        )
+        rank = dist.get_rank()
+        self.init_seeds(seed=rank + 1)
 
     @staticmethod
     def init_seeds(seed, cuda_deterministic=True):
@@ -107,7 +116,7 @@ class ProteinAnnBaseTrainer(ABC):
             job_type='training',
             reinit=True
         )
-        wandb.watch(self.model, log='all')
+        wandb.watch(self.classifier_model, log='all')
 
     @abstractmethod
     def dataset_register(
@@ -119,26 +128,6 @@ class ProteinAnnBaseTrainer(ABC):
             **kwargs
     ):
         """register dataset"""
-
-    @staticmethod
-    def ddp_register(local_rank):
-        """
-        Initialize the PyTorch distributed backend. This is essential even for single machine, multiple GPU training
-        dist.init_process_group(backend='nccl', init_method='tcp://localhost:FREE_PORT', world_size=1, rank=0).
-        The distributed process group contains all the processes that can communicate and synchronize with each other.
-        """
-        torch.cuda.set_device(local_rank)
-        dist.init_process_group(
-            backend="nccl",
-            # init_method=f"tcp://{os.environ['MASTER_ADDR']}:{os.environ['MASTER_PORT']}",
-            # rank=local_rank,
-            # world_size=dist.get_world_size(),
-            timeout=timedelta(seconds=30)
-        )
-
-    @staticmethod
-    def ddp_clean():
-        dist.destroy_process_group()
 
     def model_register(
             self,
@@ -155,19 +144,22 @@ class ProteinAnnBaseTrainer(ABC):
             model category
         :return:
         """
-        local_rank = kwargs.get('local_rank')
         reuse = kwargs.get('reuse')
 
         if model_type == EMB:
             self.embedding_model = model
             self.embedding_model.cuda()
-            # self.embedding_model.model = DDP(self.embedding_model.model, device_ids=[local_rank], output_device=local_rank)
+            # self.embedding_model.model = DDP(self.embedding_model.model,
+            #                                  device_ids=[self.local_rank],
+            #                                  output_device=self.local_rank)
         elif model_type == CLS:
             if not reuse:
                 self.classifier_model = model.cuda()
             else:
                 self.load_ckpt(ckpt_home=self.ckpt_home, reuse=True)
-            self.classifier_model = DDP(self.classifier_model, device_ids=[local_rank], output_device=local_rank)
+            self.classifier_model = DDP(self.classifier_model,
+                                        device_ids=[self.local_rank],
+                                        output_device=self.local_rank)
         else:
             raise ValueError('Got an invalid model category, only support `CLS` and `EMB`!')
 
@@ -196,11 +188,11 @@ class ProteinAnnBaseTrainer(ABC):
             model_folder=config.output_home
         )
 
-        wandb.config({
+        wandb.config = {
             'learning_rate': config.learning_rate,
             'max_epoch': config.max_epoch,
-            'batch_size': self.batch_size,
-            'loss_weight': config.loss_weight})
+            'batch_size': config.batch_size,
+            'loss_weight': config.loss_weight}
 
         for eph in range(config.max_epoch):
             eph_loss = []
@@ -214,9 +206,6 @@ class ProteinAnnBaseTrainer(ABC):
                 # print(f'loss: {loss.item()}')
                 # print(f''.center(100, '*'))
 
-
-                # if dist.get_rank() == 0:
-                #     dist.barrier()
                 dist.barrier()
                 gather_loss = [torch.zeros_like(loss) for _ in range(dist.get_world_size())]
                 dist.all_gather(gather_loss, loss)
@@ -237,8 +226,6 @@ class ProteinAnnBaseTrainer(ABC):
                 for sample in self.test_loader:
                     accuracy = self.valid_step(sample=sample)
 
-                    # if dist.get_rank() == 0:
-                    #     dist.barrier()
                     dist.barrier()
                     gathered_acc = [torch.zeros_like(accuracy) for _ in range(dist.get_world_size())]
                     dist.all_gather(gathered_acc, accuracy)
@@ -255,7 +242,6 @@ class ProteinAnnBaseTrainer(ABC):
                 break
             elif early_stopper.counter == 0:
                 self.save_ckpt(ckpt_home=self.ckpt_home)
-
 
     def save_ckpt(self, ckpt_home):
         if dist.get_rank() == 0:
