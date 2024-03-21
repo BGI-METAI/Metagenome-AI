@@ -7,8 +7,8 @@
 import os
 import os.path as osp
 import random
-import torch.distributed as dist
 from warnings import filterwarnings
+
 from framework import ProteinNERTrainer, ParseConfig
 from framework.classifier import AminoAcidsNERClassifier
 from framework.base_train import TRAIN_LOADER_TYPE
@@ -17,11 +17,10 @@ from framework.prottrans import ProtTransEmbeddings
 filterwarnings('ignore')
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1,2"
 
     # loading hyper-parameters
     config = ParseConfig.register_parameters()
-    local_rank=int(os.environ["LOCAL_RANK"])
 
     # prepare dataset
     files = [osp.join(config.data_path, f) for f in os.listdir(config.data_path) if f.endswith('pkl')]
@@ -32,11 +31,6 @@ if __name__ == '__main__':
 
     # initialize trainer class
     trainer = ProteinNERTrainer(config)
-
-    # register and initialize DDP
-    trainer.ddp_register(local_rank=local_rank)
-    rank = dist.get_rank()
-    trainer.init_seeds(seed=rank + 1)
 
     # register dataset
     trainer.dataset_register(
@@ -57,7 +51,6 @@ if __name__ == '__main__':
     trainer.model_register(
         model=embedding_model,
         model_type='emb',
-        local_rank=local_rank
     )
 
     # instantiate and register classifier model
@@ -68,7 +61,6 @@ if __name__ == '__main__':
     trainer.model_register(
         model=classifier_model,
         model_type='cls',
-        local_rank=local_rank
     )
 
     trainer.train(config)
