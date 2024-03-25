@@ -36,8 +36,8 @@ class ParseConfig:
         parser.add_argument('--do_lower_case', type=bool, default=False, help='parameter of pretrained pLMs tokenizer')
         parser.add_argument('--legacy', type=bool, default=False, help='parameter of pretrained pLMs tokenizer')
 
-        parser.add_argument('--train_size', type=float, default=0.7, help='the size of training dataset')
-        parser.add_argument('--batch_size', type=int, default=4, help='batch size')
+        parser.add_argument('--train_size', type=float, default=0.9, help='the size of training dataset')
+        parser.add_argument('--batch_size', type=int, default=64, help='batch size')
         parser.add_argument('--num_classes', type=int, default=20794, help='the number of categories')  # PFAM: 20794, GENE3D: 6595
 
         parser.add_argument('--max_epoch', type=int, default=100)

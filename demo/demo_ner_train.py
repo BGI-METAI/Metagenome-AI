@@ -6,18 +6,21 @@
 # @Email   : zhangchao5@genomics.cn
 import os
 import os.path as osp
+import sys
 import random
 from warnings import filterwarnings
 
+sys.path.insert(0, '..')
+
 from framework import ProteinNERTrainer, ParseConfig
 from framework.classifier import AminoAcidsNERClassifier
-from framework.base_train import TRAIN_LOADER_TYPE
+from framework.base_train import TRAIN_LOADER_TYPE, TEST_LOADER_TYPE
 from framework.prottrans import ProtTransEmbeddings
 
 filterwarnings('ignore')
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1,2"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "1,2"
 
     # loading hyper-parameters
     config = ParseConfig.register_parameters()
@@ -37,6 +40,16 @@ if __name__ == '__main__':
         data_files=train_files,
         batch_size=config.batch_size,
         data_type=TRAIN_LOADER_TYPE,
+        tokenizer_model_name_or_path=config.model_path_or_name,
+        tokenizer_mode=config.embed_mode,
+        legacy=False,
+        do_lower_case=False
+    )
+
+    trainer.dataset_register(
+        data_files=test_files,
+        batch_size=config.batch_size,
+        data_type=TEST_LOADER_TYPE,
         tokenizer_model_name_or_path=config.model_path_or_name,
         tokenizer_mode=config.embed_mode,
         legacy=False,

@@ -68,6 +68,7 @@ class ProteinNERTrainer(ProteinAnnBaseTrainer):
             #     target=batch_label,
             #     weight=loss_weight
             # )
+            assert predict.shape[1] == batch_label.shape[1]
             loss = ProteinLoss.focal_loss(
                 pred=predict.permute(0, 2, 1),
                 target=batch_label,
@@ -75,8 +76,8 @@ class ProteinNERTrainer(ProteinAnnBaseTrainer):
                 gamma=2.
             )
 
-        del x_data, predict
-        torch.cuda.empty_cache()
+        # del x_data, predict
+        # torch.cuda.empty_cache()
 
         return loss
 
@@ -93,8 +94,8 @@ class ProteinNERTrainer(ProteinAnnBaseTrainer):
         pred = torch.nn.functional.softmax(logist, dim=-1).argmax(-1)
         accuracy = torch.eq(pred, batch_label).float().mean()
 
-        del x_data, logist, pred
-        torch.cuda.empty_cache()
+        # del x_data, logist, pred
+        # torch.cuda.empty_cache()
 
         return accuracy
 

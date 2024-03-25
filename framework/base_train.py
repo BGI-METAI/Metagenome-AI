@@ -54,6 +54,8 @@ class ProteinAnnBaseTrainer(ABC):
 
         # register DDP
         self.local_rank = int(os.environ['LOCAL_RANK'])
+        # rank = int(os.environ["RANK"])
+        # torch.cuda.set_device(rank % torch.cuda.device_count())
         torch.cuda.set_device(self.local_rank)
         dist.init_process_group(
             backend="nccl",
