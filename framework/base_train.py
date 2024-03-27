@@ -52,6 +52,9 @@ class ProteinAnnBaseTrainer(ABC):
         self.ckpt_home = osp.join(config.output_home, 'ckpt')
         Path(self.ckpt_home).mkdir(parents=True, exist_ok=True)
 
+        if config.is_save_batch:
+            self.ckpt_batch_home = osp.join(config.output_home, 'ckpt', 'each_batch')
+
         # register DDP
         self.local_rank = int(os.environ['LOCAL_RANK'])
         # rank = int(os.environ["RANK"])
@@ -186,7 +189,7 @@ class ProteinAnnBaseTrainer(ABC):
 
         self.wandb_register(
             config.user_name,
-            project='proteinNER',
+            project=config.project,
             model_folder=config.output_home
         )
 
@@ -201,12 +204,8 @@ class ProteinAnnBaseTrainer(ABC):
             self.classifier_model.train()
             self.train_loader.sampler.set_epoch(eph)
             batch_iterator = tqdm(self.train_loader, desc=f'Eph: {eph:03d}')
-            for sample in batch_iterator:
+            for idx, sample in enumerate(batch_iterator):
                 loss = self.train_step(sample=sample, loss_weight=config.loss_weight)
-
-                # print(f' device: {dist.get_rank()} '.center(100, '*'))
-                # print(f'loss: {loss.item()}')
-                # print(f''.center(100, '*'))
 
                 dist.barrier()
                 gather_loss = [torch.zeros_like(loss) for _ in range(dist.get_world_size())]
@@ -220,6 +219,8 @@ class ProteinAnnBaseTrainer(ABC):
                 scaler.scale(loss).backward()
                 scaler.step(self.optimizer)
                 scaler.update()
+                if config.is_save_batch and idx % 1000 == 0:
+                    self.save_ckpt(self.ckpt_batch_home)
             self.scheduler.step()
 
             with torch.no_grad():
