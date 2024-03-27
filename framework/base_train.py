@@ -54,6 +54,7 @@ class ProteinAnnBaseTrainer(ABC):
 
         if config.is_save_batch:
             self.ckpt_batch_home = osp.join(config.output_home, 'ckpt', 'each_batch')
+            Path(self.ckpt_batch_home).mkdir(parents=True, exist_ok=True)
 
         # register DDP
         self.local_rank = int(os.environ['LOCAL_RANK'])
