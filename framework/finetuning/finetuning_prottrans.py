@@ -18,8 +18,6 @@ class FineTuneProtTransAAModel(nn.Module):
         self.embedding = get_peft_model(embedding, peft_config)
         self.classifier = nn.Linear(self.embedding.config.d_model, n_classes)
 
-    def forward(self, x):
-        x = self.embedding(x)
-        x = self.classifier(x)
-        return x
+    def forward(self, input_ids, attention_mask):
+        return self.classifier(self.embedding(input_ids.cuda(), attention_mask.cuda()).last_hidden_state)
 
