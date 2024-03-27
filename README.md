@@ -43,7 +43,8 @@ In order to transform the proteins functional annotation into Named Entity Recog
 ---
 >The preprocessed data files with GENE3D label is located in `/home/share/huadjyin/home/yinpeng/zkx/data/interpro/fragment_info/GENE3D_seq_fragment_out/`. There are a total of 267 subfiles in this directory, and the header of each file is: protein id `\t` sequence `\t` label. Note that the label id corresponding to each amino acid location is separated by `","`. The 267 files contain a total of 143,196,535 proteins, and each line is a unique protein id.
 >
->The preprocessed data files with PFAM label is located in `/home/share/huadjyin/home/yinpeng/ljl/data/PFAM_output_1`. Each protein is saved as a `.pkl` file named after the protein ID (sequence, tags, labels).
+>The preprocessed data files with PFAM label is located in `/home/share/huadjyin/home/yinpeng/ljl/data/PFAM_output_1/`. Each protein is saved as a `.pkl` file named after the protein ID (sequence, tags, labels). We then transferred proteins with sequence lengths greater than 1000 (7,178,273 in total) to `./PFAM_1000_plus/` and the others to `./PFAM_output_1/`.
+
 
 ## Declaration      
 This is not an official document, please do not distribute it externally.       
