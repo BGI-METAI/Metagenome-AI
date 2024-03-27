@@ -14,7 +14,7 @@ class ParseConfig:
             '--data_path',
             type=str,
             # default='/jdfssz1/ST_BIOINTEL/P20Z10200N0157/Bioinformatic_Frontier_Algorithms/05.user/zhangchao5/metageome/dataset/gene3d_pkls',
-            default='/home/share/huadjyin/home/s_cenweixuan/dataset/pfam/sub_pfam',
+            default='/home/share/huadjyin/home/s_cenweixuan/dataset/gene3d/gene3d_short_sub10w',
             help='the path of input dataset'
         )
         parser.add_argument(

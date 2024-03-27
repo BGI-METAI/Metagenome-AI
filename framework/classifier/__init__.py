@@ -6,3 +6,5 @@
 # @Email   : zhangchao5@genomics.cn
 from .linear_classifier import FullLinearClassifier
 from .protein_aa_ner import AminoAcidsNERClassifier
+from .train import ProteinNERTrainer
+from .parse_configuration import ParseConfig

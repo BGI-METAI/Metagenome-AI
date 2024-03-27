@@ -92,7 +92,7 @@ class ProteinNERTrainer(ProteinAnnBaseTrainer):
 
         logist = self.classifier_model(x_data)
         pred = torch.nn.functional.softmax(logist, dim=-1).argmax(-1)
-        accuracy = torch.eq(pred, batch_label).float().mean()
+        accuracy = torch.eq(pred, batch_label.to(pred.device)).float().mean()
 
         # del x_data, logist, pred
         # torch.cuda.empty_cache()
