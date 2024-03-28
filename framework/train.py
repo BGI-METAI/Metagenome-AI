@@ -38,6 +38,7 @@ from torch.distributed import init_process_group, destroy_process_group
 import torch.distributed as dist
 
 from embedding import EsmEmbedding
+from embedding_protein_vec import ProteinVecEmbedding
 from dataset import CustomDataset
 from config import get_config, get_weights_file_path
 
@@ -181,6 +182,8 @@ def choose_llm(config):
     """
     if config["emb_type"] == "ESM":
         return EsmEmbedding()
+    if config["emb_type"] == "PVEC":
+        return ProteinVecEmbedding()
     else:
         raise NotImplementedError("This type of embedding is not supported")
 

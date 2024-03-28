@@ -22,7 +22,7 @@ def get_config():
         "batch_size": 64,
         "num_epochs": 20,
         "lr": 1e-3,
-        "emb_type": "ESM",
+        "emb_type": "PVEC",
         "label": "label",
         "max_seq_len": 700 * 2,
         "sequence": "seq",
