@@ -4,38 +4,15 @@
 # @Author  : zhangchao
 # @File    : dataset.py
 # @Email   : zhangchao5@genomics.cn
-import os
-import os.path as osp
 import re
 import math
 import pickle
 import torch
 import torch.distributed as dist
-import pandas as pd
 
 from typing import Optional, Union, List
 from torch.utils.data import Dataset, Sampler
-from transformers import T5Tokenizer, BertTokenizer, AlbertTokenizer, XLNetTokenizer
-
-from framework.prottrans import PROTTRANS_T5_TYPE, PROTTRANS_BERT_TYPE, PROTTRANS_ALBERT_TYPE, PROTTRANS_XLENT_TYPE
-
-
-class CustomDataFrameDataset(Dataset):
-    def __init__(
-            self,
-            dataset: pd.DataFrame,
-            sequence_key: str = 'sequence',
-            target_key: str = 'label'
-    ):
-        self.dataset = dataset
-        self.sequence_list = self.dataset[sequence_key].tolist()
-        self.target_list = self.dataset[target_key].tolist()
-
-    def __len__(self):
-        return self.dataset.shape[0]
-
-    def __getitem__(self, idx):
-        return self.sequence_list[idx], self.target_list[idx]
+from transformers import T5Tokenizer
 
 
 class CustomNERDataset(Dataset):
@@ -43,21 +20,18 @@ class CustomNERDataset(Dataset):
             self,
             processed_sequence_label_pairs_path: List[str],
             tokenizer_model_name_or_path: str,
-            mode: Optional[Union[PROTTRANS_T5_TYPE, PROTTRANS_BERT_TYPE, PROTTRANS_ALBERT_TYPE, PROTTRANS_XLENT_TYPE]],
             **kwargs
     ):
         self.pairs_path = processed_sequence_label_pairs_path
-        if mode == PROTTRANS_T5_TYPE:
-            self.tokenizer = T5Tokenizer.from_pretrained(tokenizer_model_name_or_path, **kwargs)
-        elif mode == PROTTRANS_BERT_TYPE:
-            self.tokenizer = BertTokenizer.from_pretrained(tokenizer_model_name_or_path, **kwargs)
-        elif mode == PROTTRANS_ALBERT_TYPE:
-            self.tokenizer = AlbertTokenizer.from_pretrained(tokenizer_model_name_or_path, **kwargs)
-        elif mode == PROTTRANS_XLENT_TYPE:
-            self.tokenizer = XLNetTokenizer.from_pretrained(tokenizer_model_name_or_path, **kwargs)
-        else:
-            raise ValueError(
-                "Got an invalid `mode`, only support `PROTTRANS_T5_TYPE`, `PROTTRANS_BERT_TYPE`, `PROTTRANS_ALBERT_TYPE`, `PROTTRANS_XLENT_TYPE`")
+        self.tokenizer = T5Tokenizer.from_pretrained(tokenizer_model_name_or_path, **kwargs)
+
+    def __len__(self):
+        return len(self.pairs_path)
+
+    def __getitem__(self, idx):
+        with open(self.pairs_path[idx], 'rb') as file:
+            data = pickle.load(file)
+        return {'seq': data['seq'], 'label': data['label']}
 
     def collate_fn(self, batch_sample):
         batch_seq, batch_label = [], []
@@ -104,14 +78,6 @@ class CustomNERDataset(Dataset):
             return [' '.join(list(seq)) for seq in sequence]
         else:
             return sequence
-
-    def __len__(self):
-        return len(self.pairs_path)
-
-    def __getitem__(self, idx):
-        with open(self.pairs_path[idx], 'rb') as file:
-            data = pickle.load(file)
-        return {'seq': data['seq'], 'label': data['label']}
 
 
 class SequentialDistributedSampler(Sampler):
