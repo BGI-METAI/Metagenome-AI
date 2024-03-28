@@ -8,9 +8,9 @@ import torch
 from typing import Optional, Union
 from torch.utils.data import DataLoader
 
-from framework.classifier.loss_fn import ProteinLoss
-from framework.dataset import CustomNERDataset, SequentialDistributedSampler
-from framework.base_train import ProteinAnnBaseTrainer, TRAIN_LOADER_TYPE, TEST_LOADER_TYPE
+from proteinNER.classifier.loss_fn import ProteinLoss
+from proteinNER.base_module.dataset import CustomNERDataset, SequentialDistributedSampler
+from proteinNER.base_train import ProteinAnnBaseTrainer, TRAIN_LOADER_TYPE, TEST_LOADER_TYPE
 
 
 class ProteinNERTrainer(ProteinAnnBaseTrainer):
