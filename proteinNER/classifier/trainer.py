@@ -4,14 +4,13 @@
 # @Author  : zhangchao
 # @File    : trainer.py
 # @Email   : zhangchao5@genomics.cn
-from datetime import datetime
-
 import wandb
 import torch
 import torch.distributed as dist
 import numpy as np
 
-from datasets import tqdm
+from tqdm import tqdm
+from datetime import datetime
 
 from proteinNER.base_module import BaseTrainer
 from proteinNER.base_module.utils import EarlyStopper

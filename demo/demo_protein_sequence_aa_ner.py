@@ -18,29 +18,29 @@ def register_parameters():
     parser.add_argument(
         '--data_path',
         type=str,
-        default='/home/share/huadjyin/home/s_cenweixuan/dataset/gene3d/gene3d_short_sub10w',
+        default='/home/share/huadjyin/home/zhangchao5/dataset/GENE3D/gene3d_short',
         help='the path of input dataset'
     )
     parser.add_argument(
         '--output_home',
         type=str,
-        default='/home/share/huadjyin/home/s_cenweixuan/codes/peft/output',
+        default='/home/share/huadjyin/home/zhangchao5/code/ProtT5/output',
     )
     parser.add_argument(
         '--model_path_or_name',
         type=str,
-        default='/home/share/huadjyin/home/s_cenweixuan/weight/prot_t5_xl_half_uniref50-enc',
+        default='/home/share/huadjyin/home/zhangchao5/weight/prot_t5_xl_half_uniref50-enc',
         help='pretrianed pLM model path or name'
     )
 
     parser.add_argument('--train_size', type=float, default=0.9, help='the size of training dataset')
     parser.add_argument('--seed', type=int, default=42, help='random seed')
-    parser.add_argument('--batch_size', type=int, default=2, help='batch size')
-    parser.add_argument('--num_classes', type=int, default=20794,
+    parser.add_argument('--batch_size', type=int, default=3, help='batch size')
+    parser.add_argument('--num_classes', type=int, default=6595,
                         help='the number of categories')  # PFAM: 20794, GENE3D: 6595
 
     parser.add_argument('--epoch', type=int, default=100)
-    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--lr', type=float, default=1e-6)
     parser.add_argument('--loss_weight', type=float, default=1.)
     parser.add_argument('--patience', type=int, default=3)
     parser.add_argument('--load_best_model', type=bool, default=True)
@@ -54,7 +54,7 @@ def register_parameters():
 
 
 def worker():
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1,2"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
     args = register_parameters()
 
     # prepare dataset

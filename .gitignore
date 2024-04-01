@@ -172,3 +172,4 @@ output/
 */transformer/
 configurations.json
 */config.py
+*.sh
