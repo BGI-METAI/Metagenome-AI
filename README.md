@@ -1,6 +1,11 @@
-# Framework for Protein Function/Domain/GO-terms Prediction                     
+[![python 3.8.19](https://img.shields.io/badge/python-3.8.19-brightgreen)](https://www.python.org/)
+[![pytorch 2.0.0](https://img.shields.io/badge/pytorch-2.0.0-red)](https://pytorch.org/get-started/previous-versions/)
+[![transformers 4.39.2](https://img.shields.io/badge/transformers-4.39.2-blue)](https://pypi.org/)
+[![wandb 0.16.5](https://img.shields.io/badge/wandb-0.16.5-orange)](https://pypi.org/)
+# Unraveling the Mystery: Predicting the Function, Domain, and GO Term of Each Amino Acid in the Protein Sequence                                              
 Work is in progress......
-
+        
+                
 ## About Dataset (Interpro database)                      
 **Preprocessing Details**                         
                        
