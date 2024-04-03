@@ -8,6 +8,9 @@ import os
 import os.path as osp
 import random
 import argparse
+import sys
+
+sys.path.insert(0, "..")
 
 from proteinNER.classifier.model import ProtTransT5ForAAClassifier
 from proteinNER.classifier.trainer import ProteinNERTrainer
@@ -16,9 +19,15 @@ from proteinNER.classifier.trainer import ProteinNERTrainer
 def register_parameters():
     parser = argparse.ArgumentParser(description='Protein Sequence Amino Acids Annotation Framework')
     parser.add_argument(
-        '--data_path',
+        '--train_data_path',
         type=str,
-        default='/home/share/huadjyin/home/zhangchao5/dataset/GENE3D/gene3d_short',
+        default='/home/share/huadjyin/home/zhangchao5/dataset/gene3d/gene3d.train/chunk1.txt',
+        help='the path of input dataset'
+    )
+    parser.add_argument(
+        '--test_data_path',
+        type=str,
+        default='/home/share/huadjyin/home/zhangchao5/dataset/gene3d/gene3d.test.txt',
         help='the path of input dataset'
     )
     parser.add_argument(
@@ -29,20 +38,20 @@ def register_parameters():
     parser.add_argument(
         '--model_path_or_name',
         type=str,
-        default='/home/share/huadjyin/home/zhangchao5/weight/prot_t5_xl_half_uniref50-enc',
+        default='/home/share/huadjyin/home/s_cenweixuan/weight/prot_t5_xl_half_uniref50-enc',
         help='pretrianed pLM model path or name'
     )
 
-    parser.add_argument('--train_size', type=float, default=0.9, help='the size of training dataset')
+    parser.add_argument('--train_size', type=float, default=0.8, help='the size of training dataset')
     parser.add_argument('--seed', type=int, default=42, help='random seed')
     parser.add_argument('--batch_size', type=int, default=3, help='batch size')
     parser.add_argument('--num_classes', type=int, default=6595,
                         help='the number of categories')  # PFAM: 20794, GENE3D: 6595
 
     parser.add_argument('--epoch', type=int, default=100)
-    parser.add_argument('--lr', type=float, default=1e-6)
+    parser.add_argument('--lr', type=float, default=5e-6)
     parser.add_argument('--loss_weight', type=float, default=1.)
-    parser.add_argument('--patience', type=int, default=3)
+    parser.add_argument('--patience', type=int, default=4)
     parser.add_argument('--load_best_model', type=bool, default=True)
     parser.add_argument('--reuse', type=bool, default=False)
 
@@ -58,11 +67,15 @@ def worker():
     args = register_parameters()
 
     # prepare dataset
-    files = [osp.join(args.data_path, f) for f in os.listdir(args.data_path) if f.endswith('pkl')]
-    random.seed(args.seed)
-    random.shuffle(files)
-    train_files = files[:round(len(files) * args.train_size)]
-    test_files = files[round(len(files) * args.train_size):]
+    train_files = []
+    with open(args.train_data_path, 'r') as file:
+        for line in file.readlines():
+            train_files.extend(line.strip().split(' '))
+
+    test_files = []
+    with open(args.test_data_path, 'r') as file:
+        for line in file.readlines():
+            test_files.extend(line.strip().split(' '))
 
     # initialize trainer class
     trainer = ProteinNERTrainer(output_home=args.output_home)

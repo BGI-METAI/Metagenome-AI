@@ -31,9 +31,12 @@ class ProteinNERTrainer(BaseTrainer):
         wandb_username = kwargs.get('username')
         wandb_project = kwargs.get('project')
         wandb_group = kwargs.get('group')
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr)
-        self.lr_scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, 1, gamma=0.9)
-        self.scaler = torch.cuda.amp.GradScaler()
+
+        reuse = kwargs.get('reuse')
+        if not reuse:
+            self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr)
+            self.lr_scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, 1, gamma=0.9)
+            self.scaler = torch.cuda.amp.GradScaler()
 
         early_stopper = EarlyStopper(patience=patience)
         self.register_wandb(
@@ -62,13 +65,18 @@ class ProteinNERTrainer(BaseTrainer):
                     weight=loss_weight,
                     gamma=2.
                 )
-                dist.barrier()
-                gather_loss = [torch.zeros_like(loss) for _ in range(dist.get_world_size())]
-                dist.all_gather(gather_loss, loss)
-                gathered_mean_loss = torch.stack(gather_loss).mean().item()
-                batch_iterator.set_postfix({'Loss': f'{gathered_mean_loss:.4f}'})
-                eph_loss.append(gathered_mean_loss)
-                wandb.log({'loss': gathered_mean_loss})
+
+                batch_iterator.set_postfix({'Loss': f'{loss.item():.4f}'})
+                eph_loss.append(loss.item())
+                wandb.log({'loss': loss.item()})
+
+                # dist.barrier()
+                # gather_loss = [torch.zeros_like(loss) for _ in range(dist.get_world_size())]
+                # dist.all_gather(gather_loss, loss)
+                # gathered_mean_loss = torch.stack(gather_loss).mean().item()
+                # batch_iterator.set_postfix({'Loss': f'{gathered_mean_loss:.4f}'})
+                # eph_loss.append(gathered_mean_loss)
+                # wandb.log({'loss': gathered_mean_loss})
 
                 self.optimizer.zero_grad()
                 self.scaler.scale(loss).backward()
