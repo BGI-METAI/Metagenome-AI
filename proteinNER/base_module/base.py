@@ -58,7 +58,7 @@ class BaseTrainer(ABC):
         torch.cuda.set_device(self.local_rank)
         dist.init_process_group(
             backend='nccl',
-            timeout=timedelta(seconds=30)
+            timeout=timedelta(minutes=60)
         )
         rank = dist.get_rank()
         self.init_seeds(seed=rank + 1)
@@ -171,7 +171,7 @@ class BaseTrainer(ABC):
         if not reuse:
             self.model = model.cuda()
         else:
-            raise NotImplementedError
+            self.load_ckpt(mode='batch')
         self.model = DDP(self.model, device_ids=[self.local_rank], output_device=self.local_rank)
 
     def save_ckpt(self, mode):
@@ -200,8 +200,8 @@ class BaseTrainer(ABC):
         else:
             raise ValueError('Got an invalid dataset mode, ONLY SUPPORT: `batch`, `epoch` or `best`')
 
-        trainer_ckpt = torch.load(osp.join(path, 'trainer.bin'))
-        model_ckpt = torch.load(osp.join(path, 'classifier.bin'))
+        trainer_ckpt = torch.load(osp.join(path, 'trainer.bin'), map_location=torch.device('cuda'))
+        model_ckpt = torch.load(osp.join(path, 'classifier.bin'), map_location=torch.device('cuda'))
 
         self.optimizer.load_state_dict(trainer_ckpt['optimizer'])
         self.lr_scheduler.load_state_dict(trainer_ckpt['lr_scheduler'])
