@@ -31,13 +31,14 @@ class CustomNERDataset(Dataset):
     def __getitem__(self, idx):
         with open(self.pairs_path[idx], 'rb') as file:
             data = pickle.load(file)
-        return {'seq': data['seq'], 'label': data['label']}
+        return {'seq': data['seq'], 'label': data['label'], 'path': self.pairs_path[idx]}
 
     def collate_fn(self, batch_sample):
-        batch_seq, batch_label = [], []
+        batch_seq, batch_label, batch_path = [], [], []
         for sample in batch_sample:
             batch_seq.append(sample['seq'])
             batch_label.append(sample['label'])
+            batch_path.append(sample['path'])
         batch_seq = self.prepare_sequence(batch_seq)
         tokens = self.tokenizer.batch_encode_plus(
             batch_text_or_text_pairs=batch_seq,
@@ -50,7 +51,7 @@ class CustomNERDataset(Dataset):
             tag_tensor = torch.tensor(val)
             batch_label[idx] = torch.nn.functional.pad(tag_tensor, (0, input_ids.shape[1] - tag_tensor.shape[0]))
         batch_label = torch.stack(batch_label)
-        return input_ids, attention_mask, batch_label
+        return input_ids, attention_mask, batch_label, batch_path
 
     @staticmethod
     def prepare_sequence(

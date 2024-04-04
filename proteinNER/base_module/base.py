@@ -52,7 +52,8 @@ class BaseTrainer(ABC):
         self.wandb_home = self.register_dir(output_home, 'wandb')
         # result
         self.result_home = self.register_dir(output_home, 'result')
-
+        # except
+        self.except_home = self.register_dir(output_home, 'except')
         # register DDP
         self.local_rank = int(os.environ["LOCAL_RANK"])
         torch.cuda.set_device(self.local_rank)
