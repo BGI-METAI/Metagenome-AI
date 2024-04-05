@@ -91,9 +91,9 @@ class ProteinNERTrainer(BaseTrainer):
                 except Exception as e:
                     with open(osp.join(self.except_home, f'{socket.gethostname()}.except'), 'a') as except_file:
                         for name in batch_path:
-                            except_file.write(name)
-                        except_file.write(e)
-                        except_file.write(f' split line '.center(100, '*'))
+                            except_file.write(name + '\n')
+                        except_file.write(f'{e}' + '\n')
+                        except_file.write(f' split line '.center(100, '*') + '\n\n')
             self.lr_scheduler.step()
             self.valid_model_performance()
             if early_stopper(np.mean(eph_loss)):
