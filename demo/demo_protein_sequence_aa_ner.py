@@ -47,6 +47,7 @@ def register_parameters():
     parser.add_argument('--batch_size', type=int, default=3, help='batch size')
     parser.add_argument('--num_classes', type=int, default=6595,
                         help='the number of categories')  # PFAM: 20794, GENE3D: 6595
+    parser.add_argument('--add_background', type=bool, default=True, help='add background type to the final categories')
 
     parser.add_argument('--epoch', type=int, default=100)
     parser.add_argument('--lr', type=float, default=5e-6)
@@ -97,7 +98,7 @@ def worker():
 
     model = ProtTransT5ForAAClassifier(
         model_name_or_path=args.model_path_or_name,
-        num_classes=args.num_classes,
+        num_classes=args.num_classes + 1 if args.add_background else args.num_classes,
         lora_inference_mode=False,
         lora_r=8,
         lora_alpha=32,
