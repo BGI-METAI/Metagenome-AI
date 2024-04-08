@@ -91,7 +91,7 @@ class ProteinNERTrainer(BaseTrainer):
                 print(f"{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')} Model Training Finished!")
                 print(f'The best `ckpt` file has saved in {self.best_ckpt_home}')
                 if load_best_model:
-                    self.load_ckpt(mode='best')
+                    self.load_ckpt(mode='best', is_trainable=False)
                 break
             elif early_stopper.counter == 0:
                 self.save_ckpt(mode='best')

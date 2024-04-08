@@ -19,6 +19,7 @@ from pathlib import Path
 from datetime import timedelta, datetime
 from typing import Optional, Union
 
+from peft import PeftModel
 from torch.backends import cudnn
 from torch.optim.lr_scheduler import LRScheduler
 from torch.optim.optimizer import Optimizer
@@ -168,11 +169,12 @@ class BaseTrainer(ABC):
 
     def register_model(self, model, **kwargs):
         reuse = kwargs.get('reuse', False)
+        is_trainable = kwargs.get('is_trainable', True)
 
         if not reuse:
             self.model = model.cuda()
         else:
-            self.load_ckpt(mode='batch')
+            self.load_ckpt(mode='batch', is_trainable=is_trainable)
         self.model = DDP(self.model, device_ids=[self.local_rank], output_device=self.local_rank)
 
     def save_ckpt(self, mode):
@@ -182,18 +184,20 @@ class BaseTrainer(ABC):
                 "lr_scheduler": self.lr_scheduler.state_dict(),
                 "scaler": self.scaler.state_dict()
             }
-            classifier_dict = {"state_dict": self.model.module.state_dict()}
+            classifier_dict = {"state_dict": self.model.module.classifier.state_dict()}
 
             if mode == 'batch':
                 torch.save(trainer_dict, osp.join(self.batch_ckpt_home, 'trainer.bin'))
                 torch.save(classifier_dict, osp.join(self.batch_ckpt_home, 'classifier.bin'))
+                self.model.module.embedding.lora_embedding.save_pretrained(self.batch_ckpt_home)
             elif mode in ['epoch', 'best']:
                 torch.save(trainer_dict, osp.join(self.best_ckpt_home, 'trainer.bin'))
                 torch.save(classifier_dict, osp.join(self.best_ckpt_home, 'classifier.bin'))
+                self.model.module.embedding.lora_embedding.save_pretrained(self.best_ckpt_home)
             else:
                 raise ValueError('Got an invalid dataset mode, ONLY SUPPORT: `batch`, `epoch` or `best`')
 
-    def load_ckpt(self, mode):
+    def load_ckpt(self, mode, is_trainable=False):
         if mode == 'batch':
             path = self.batch_ckpt_home
         elif mode in ['epoch', 'best']:
@@ -202,16 +206,22 @@ class BaseTrainer(ABC):
             raise ValueError('Got an invalid dataset mode, ONLY SUPPORT: `batch`, `epoch` or `best`')
 
         trainer_ckpt = torch.load(osp.join(path, 'trainer.bin'), map_location=torch.device('cuda'))
-        model_ckpt = torch.load(osp.join(path, 'classifier.bin'), map_location=torch.device('cuda'))
+        classifier_ckpt = torch.load(osp.join(path, 'classifier.bin'), map_location=torch.device('cuda'))
 
         self.optimizer.load_state_dict(trainer_ckpt['optimizer'])
         self.lr_scheduler.load_state_dict(trainer_ckpt['lr_scheduler'])
         self.scaler.load_state_dict(trainer_ckpt['scaler'])
 
-        state_dict = self.model.module.state_dict()
-        trained_dict = {k: v for k, v in model_ckpt['state_dict'].items() if k in state_dict}
-        state_dict.update(trained_dict)
-        self.model.module.load_state_dict(state_dict)
+        # loading LoRA model
+        self.model.embedding = PeftModel.from_pretrained(self.model.module.embedding.base_model,
+                                                         path,
+                                                         is_trainable=is_trainable)
+
+        # loading token classifier
+        classifier_state_dict = self.model.module.classifier.state_dict()
+        classifier_trained_dict = {k: v for k, v in classifier_ckpt['state_dict'].items() if k in classifier_state_dict}
+        classifier_state_dict.update(classifier_trained_dict)
+        self.model.module.classifier.load_state_dict(classifier_state_dict)
 
     @abstractmethod
     def train(self, **kwargs):
