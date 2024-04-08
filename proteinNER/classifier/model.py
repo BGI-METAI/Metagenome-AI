@@ -19,17 +19,17 @@ class ProtTransT5EmbeddingPEFTModel(nn.Module):
             lora_dropout=0.1
     ):
         super(ProtTransT5EmbeddingPEFTModel, self).__init__()
-        base_embedding = T5EncoderModel.from_pretrained(model_name_or_path)
+        self.base_model = T5EncoderModel.from_pretrained(model_name_or_path)
         peft_config = LoraConfig(
             inference_mode=lora_inference_mode,
             r=lora_r,
             lora_alpha=lora_alpha,
             lora_dropout=lora_dropout
         )
-        self.base_embedding = get_peft_model(base_embedding, peft_config)
+        self.lora_embedding = get_peft_model(self.base_model, peft_config)
 
     def forward(self, input_ids, attention_mask):
-        return self.base_embedding(input_ids, attention_mask).last_hidden_state
+        return self.lora_embedding(input_ids, attention_mask).last_hidden_state
 
 
 class ProtTransT5ForAAClassifier(nn.Module):
@@ -50,7 +50,7 @@ class ProtTransT5ForAAClassifier(nn.Module):
             lora_alpha=lora_alpha,
             lora_dropout=lora_dropout
         )
-        self.classifier = nn.Linear(self.embedding.base_embedding.config.d_model, num_classes)
+        self.classifier = nn.Linear(self.embedding.lora_embedding.config.d_model, num_classes)
 
     def forward(self, input_ids, attention_mask):
         return self.classifier(self.embedding(input_ids, attention_mask))

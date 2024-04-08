@@ -4,9 +4,6 @@
 # @Author  : zhangchao
 # @File    : demo_protein_sequence_aa_ner.py
 # @Email   : zhangchao5@genomics.cn
-import os
-import os.path as osp
-import random
 import argparse
 import sys
 
@@ -42,7 +39,6 @@ def register_parameters():
         help='pretrianed pLM model path or name'
     )
 
-    parser.add_argument('--train_size', type=float, default=0.8, help='the size of training dataset')
     parser.add_argument('--seed', type=int, default=42, help='random seed')
     parser.add_argument('--batch_size', type=int, default=3, help='batch size')
     parser.add_argument('--num_classes', type=int, default=6595,
@@ -55,6 +51,7 @@ def register_parameters():
     parser.add_argument('--patience', type=int, default=4)
     parser.add_argument('--load_best_model', type=bool, default=True)
     parser.add_argument('--reuse', type=bool, default=False)
+    parser.add_argument('--is_trainable', type=bool, default=True, help='Whether the LoRA adapter should be trainable or not.')
 
     parser.add_argument('--user_name', type=str, default='zhangchao162', help='wandb register parameter')
     parser.add_argument('--project', type=str, default='proteinNERPEFT', help='wandb project name')
@@ -104,7 +101,7 @@ def worker():
         lora_alpha=32,
         lora_dropout=0.1,
     )
-    trainer.register_model(model=model, reuse=args.reuse)
+    trainer.register_model(model=model, reuse=args.reuse, is_trainable=args.is_trainable)
 
     trainer.train(**vars(args))
 
