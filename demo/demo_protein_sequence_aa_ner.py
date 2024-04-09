@@ -18,7 +18,7 @@ def register_parameters():
     parser.add_argument(
         '--train_data_path',
         type=str,
-        default='/home/share/huadjyin/home/zhangchao5/dataset/gene3d/gene3d.train/chunk1.txt',
+        default='/home/share/huadjyin/home/zhangchao5/dataset/gene3d/gene3d.train/cat1.txt',
         help='the path of input dataset'
     )
     parser.add_argument(
@@ -46,7 +46,7 @@ def register_parameters():
     parser.add_argument('--add_background', type=bool, default=True, help='add background type to the final categories')
 
     parser.add_argument('--epoch', type=int, default=100)
-    parser.add_argument('--lr', type=float, default=5e-6)
+    parser.add_argument('--learning_rate', type=float, default=5e-6)
     parser.add_argument('--loss_weight', type=float, default=1.)
     parser.add_argument('--patience', type=int, default=4)
     parser.add_argument('--load_best_model', type=bool, default=True)
@@ -55,7 +55,7 @@ def register_parameters():
 
     parser.add_argument('--user_name', type=str, default='zhangchao162', help='wandb register parameter')
     parser.add_argument('--project', type=str, default='proteinNERPEFT', help='wandb project name')
-    parser.add_argument('--group', type=str, default='NER', help='wandb group')
+    parser.add_argument('--group', type=str, default='NER_V2', help='wandb group')
 
     return parser.parse_args()
 
