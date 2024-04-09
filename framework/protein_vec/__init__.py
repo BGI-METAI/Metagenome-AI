@@ -1,2 +1,4 @@
+from .model_protein_vec_single_variable import trans_basic_block_single, trans_basic_block_Config_single
+from .embed_structure_model import trans_basic_block_tmvec, trans_basic_block_Config_tmvec
 from .model_protein_moe import trans_basic_block, trans_basic_block_Config
 from .utils_search import featurize_prottrans, embed_vec

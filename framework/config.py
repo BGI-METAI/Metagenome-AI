@@ -15,10 +15,10 @@ from pathlib import Path
 def get_config():
     return {
         "train":
-        "/home/share/huadjyin/home/nikolamilicevic/pfam_subs/pfam.train.subs.csv",
+        "Metagenome-AI/data/pfam_tiny.train.csv",
         "valid":
-        "/home/share/huadjyin/home/nikolamilicevic/pfam_subs/pfam.valid.subs.csv",
-        "test": "/home/share/huadjyin/home/nikolamilicevic/pfam_subs/pfam.test.subs.csv",
+        "Metagenome-AI/data/pfam_tiny.valid.csv",
+        "test": "Metagenome-AI/data/pfam_tiny.test.csv",
         "batch_size": 64,
         "num_epochs": 20,
         "lr": 1e-3,
@@ -28,7 +28,7 @@ def get_config():
         "sequence": "seq",
         "target": "family",
         "model_folder": "weights",
-        "model_basename": "esm_model_",
+        "model_basename": "pvec_model_",
         "preload": None,
     }
 

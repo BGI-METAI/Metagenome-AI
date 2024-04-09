@@ -26,7 +26,7 @@ import torch
 import torch.nn as nn
 from torch.utils import data
 from torch.optim.lr_scheduler import StepLR, LinearLR
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import wandb
 
@@ -466,7 +466,7 @@ def train_classifier(rank, config, world_size):
 if __name__ == "__main__":
     warnings.filterwarnings("ignore")
     config = get_config()
-    # world_size = torch.cuda.device_count()
-    world_size = 2
+    world_size = torch.cuda.device_count()
+    # world_size = 2
     mp.spawn(train_classifier, args=(config, world_size), nprocs=world_size)
     # train_model(config)
