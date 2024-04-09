@@ -22,7 +22,6 @@ class ProteinNERTrainer(BaseTrainer):
         super(ProteinNERTrainer, self).__init__(**kwargs)
 
     def train(self, **kwargs):
-        lr = kwargs.get('lr', 1e-3)
         max_epoch = kwargs.get('epoch', 100)
         loss_weight = kwargs.get('loss_weight', 1.)
         patience = kwargs.get('patience', 4)
@@ -32,12 +31,6 @@ class ProteinNERTrainer(BaseTrainer):
         wandb_project = kwargs.get('project')
         wandb_group = kwargs.get('group')
 
-        reuse = kwargs.get('reuse')
-        if not reuse:
-            self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr)
-            self.lr_scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, 1, gamma=0.9)
-            self.scaler = torch.cuda.amp.GradScaler()
-
         early_stopper = EarlyStopper(patience=patience)
         self.register_wandb(
             user_name=wandb_username,
@@ -45,7 +38,7 @@ class ProteinNERTrainer(BaseTrainer):
             group=wandb_group
         )
         wandb.config = {
-            "learning_rate": lr,
+            "learning_rate": self.learning_rate,
             "max_epoch": max_epoch,
             "batch_size": self.batch_size,
             "loss_weight": loss_weight
@@ -71,14 +64,6 @@ class ProteinNERTrainer(BaseTrainer):
                 eph_loss.append(loss.item())
                 wandb.log({'loss': loss.item()})
 
-                # dist.barrier()
-                # gather_loss = [torch.zeros_like(loss) for _ in range(dist.get_world_size())]
-                # dist.all_gather(gather_loss, loss)
-                # gathered_mean_loss = torch.stack(gather_loss).mean().item()
-                # batch_iterator.set_postfix({'Loss': f'{gathered_mean_loss:.4f}'})
-                # eph_loss.append(gathered_mean_loss)
-                # wandb.log({'loss': gathered_mean_loss})
-
                 self.optimizer.zero_grad()
                 self.scaler.scale(loss).backward()
                 self.scaler.step(self.optimizer)
@@ -96,22 +81,28 @@ class ProteinNERTrainer(BaseTrainer):
             elif early_stopper.counter == 0:
                 self.save_ckpt(mode='best')
 
+    @staticmethod
+    def distributed_concat(tensor, num_total_examples):
+        output_tensor = [tensor.clone() for _ in range(dist.get_world_size())]
+        dist.all_gather(output_tensor, tensor)
+        concat = torch.cat(output_tensor, dim=0)
+        return concat[:num_total_examples]
+
     @torch.no_grad()
     def valid_model_performance(self):
         self.model.eval()
-        accuracy_total = []
+        total_tag = []
         for sample in self.test_loader:
             input_ids, attention_mask, batch_label = sample
             logist = self.model(input_ids.cuda(), attention_mask.cuda())
             pred = torch.nn.functional.softmax(logist, dim=-1).argmax(-1)
-            accuracy = torch.eq(pred, batch_label.to(pred.device)).float().mean()
+            correct = torch.eq(pred, batch_label.to(pred.device)).float().sum(1)
+            tag = (correct == pred.shape[-1]).float()
+            total_tag.append(tag)
+        total_tag = self.distributed_concat(torch.concat(total_tag, dim=0), len(self.test_loader))
+        accuracy = total_tag.sum() / len(total_tag)
+        wandb.log({'Accuracy': np.mean(accuracy.item())})
 
-            dist.barrier()
-            gathered_acc = [torch.zeros_like(accuracy) for _ in range(dist.get_world_size())]
-            dist.all_gather(gathered_acc, accuracy)
-            gathered_mean_acc = torch.stack(gathered_acc).mean().item()
-            accuracy_total.append(gathered_mean_acc)
-        wandb.log({'Accuracy': np.mean(accuracy_total)})
-
+    @torch.no_grad()
     def inference(self, **kwargs):
         pass
