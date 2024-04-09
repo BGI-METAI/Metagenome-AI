@@ -14,10 +14,12 @@ from pathlib import Path
 
 def get_config():
     return {
-        "train": "~/MAI/Metagenome-AI/data/pfam_tiny.train.csv",
-        "valid": "~/MAI/Metagenome-AI/data/pfam_tiny.valid.csv",
-        "test": "~/MAI/Metagenome-AI/data/pfam_tiny.test.csv",
-        "batch_size": 128,
+        "train":
+        "Metagenome-AI/data/pfam_tiny.train.csv",
+        "valid":
+        "Metagenome-AI/data/pfam_tiny.valid.csv",
+        "test": "Metagenome-AI/data/pfam_tiny.test.csv",
+        "batch_size": 64,
         "num_epochs": 20,
         "lr": 1e-3,
         "emb_type": "PVEC",

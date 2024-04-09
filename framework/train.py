@@ -467,7 +467,6 @@ def train_classifier(rank, config, world_size):
 if __name__ == "__main__":
     warnings.filterwarnings("ignore")
     config = get_config()
-    # world_size = torch.cuda.device_count()
-    world_size = 1
+    world_size = torch.cuda.device_count()  # Number of GPUs to use
     mp.spawn(train_classifier, args=(config, world_size), nprocs=world_size)
     # train_model(config)

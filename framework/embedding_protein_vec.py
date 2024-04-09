@@ -12,30 +12,30 @@ from embedding import Embedding
 
 
 class ProteinVecEmbedding(Embedding):
-    def __init__(self, device='gpu'):
+    def __init__(self):
 
-        self.device = device
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         #Protein-Vec MOE model checkpoint and config
         # wget https://users.flatironinstitute.org/thamamsy/public_www/protein_vec_models.gz
         # # Unzip this directory of models with the following command:
         # tar -zxvf protein_vec_models.gz
         # Or download from /goofys/projects/MAI/protein_vec/
-        vec_model_cpnt = 'protein_vec_models/protein_vec.ckpt'  # ~800MB
-        vec_model_config = 'protein_vec_models/protein_vec_params.json'
+        vec_model_cpnt = 'Metagenome-AI/data/protein_vec/protein_vec.ckpt'  # ~800MB
+        vec_model_config = 'Metagenome-AI/data/protein_vec/protein_vec_params.json'
 
         #Load the ProtTrans model and ProtTrans tokenizer
         self.tokenizer = T5Tokenizer.from_pretrained("Rostlab/prot_t5_xl_uniref50", do_lower_case=False )
         self.model = T5EncoderModel.from_pretrained("Rostlab/prot_t5_xl_uniref50")
         gc.collect()
 
-        model = model.to(device)
-        self.model = model.eval()
+        self.model.to(self.device)
+        self.model.eval()
 
         #Load the model
         vec_model_config = trans_basic_block_Config.from_json(vec_model_config)
         self.model_deep = trans_basic_block.load_from_checkpoint(vec_model_cpnt, config=vec_model_config)
-        self.model_deep = model_deep.to(device)
-        self.model_deep = model_deep.eval()
+        self.model_deep = self.model_deep.to(self.device)
+        self.model_deep = self.model_deep.eval()
 
         self.batch_converter = self.tokenizer.get_batch_converter()  # TODO: Check if tokenizer has this method!
 
@@ -56,6 +56,9 @@ class ProteinVecEmbedding(Embedding):
 
         return embedded_sequence  # TODO: Check if format of this embeddings is aligned with classifier layers
 
+
+    def get_embedding_dim(self):
+        return 512 # TODO: Fix
 
     def to(self, device):
         self.model_deep.to(device)
