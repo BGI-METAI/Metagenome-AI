@@ -2,8 +2,9 @@ import json
 import inspect
 from functools import partial
 from dataclasses import dataclass, asdict
-from model_protein_vec_single_variable import trans_basic_block_single, trans_basic_block_Config_single
-from embed_structure_model import trans_basic_block_tmvec, trans_basic_block_Config_tmvec
+import sys
+from protein_vec.model_protein_vec_single_variable import trans_basic_block_single, trans_basic_block_Config_single
+from protein_vec.embed_structure_model import trans_basic_block_tmvec, trans_basic_block_Config_tmvec
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -84,7 +85,7 @@ class trans_basic_block(pl.LightningModule):
         
         self.pdist = nn.PairwiseDistance(p=2)
 
-        ################## TM-Vec model
+        ################## TM-Vec model     
         vec_model_cpnt_tmvec = 'protein_vec_models/tm_vec_swiss_model_large.ckpt'
         vec_model_config_tmvec = 'protein_vec_models/tm_vec_swiss_model_large_params.json'
         
