@@ -40,6 +40,9 @@ class BaseTrainer(ABC):
     lr_scheduler: LRScheduler = field(default=None, metadata={"help": "Learning rate decay course schedule"})
     scaler: torch.cuda.amp.GradScaler = field(default=None, metadata={"help": "GradScaler"})
     batch_size: int = field(default=1, metadata={"help": "batch size"})
+    learning_rate: float = field(default=1e-3, metadata={"help": "learning rate"})
+    is_trainable: bool = field(default=True, metadata={"help": "whether the model to be train or not"})
+    reuse: bool = field(default=False, metadata={"help": "whether the model parameters to be reuse or not"})
 
     def __init__(self, **kwargs):
         # output home
@@ -91,25 +94,25 @@ class BaseTrainer(ABC):
             timestamp: str = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
     ):
         """
-                register wandb to ProteintTrainer
+        register wandb to ProteintTrainer
 
-                :param user_name:
-                    username or team name where you're sending runs.
-                    This entity must exist before you can send runs there,
-                    so make sure to create your account or team in the UI before starting to log runs.
-                    If you don't specify an entity, the run will be sent to your default entity,
-                    which is usually your username. Change your default entity in [your settings](https://wandb.ai/settings)
-                    under "default location to create new projects".
-                :param project_name:
-                    The name of the project where you're sending the new run. If the project is not specified, the run is put in an "Uncategorized" project.
-                :param group:
-                    Specify a group to organize individual runs into a larger experiment.
-                    For example, you might be doing cross validation, or you might have multiple jobs that train and evaluate
-                    a model against different test sets. Group gives you a way to organize runs together into a larger whole, and you can toggle this
-                    on and off in the UI. For more details, see our [guide to grouping runs](https://docs.wandb.com/guides/runs/grouping).
-                    wandb ouput file save path
-                :param timestamp:
-                """
+        :param user_name:
+            username or team name where you're sending runs.
+            This entity must exist before you can send runs there,
+            so make sure to create your account or team in the UI before starting to log runs.
+            If you don't specify an entity, the run will be sent to your default entity,
+            which is usually your username. Change your default entity in [your settings](https://wandb.ai/settings)
+            under "default location to create new projects".
+        :param project_name:
+            The name of the project where you're sending the new run. If the project is not specified, the run is put in an "Uncategorized" project.
+        :param group:
+            Specify a group to organize individual runs into a larger experiment.
+            For example, you might be doing cross validation, or you might have multiple jobs that train and evaluate
+            a model against different test sets. Group gives you a way to organize runs together into a larger whole, and you can toggle this
+            on and off in the UI. For more details, see our [guide to grouping runs](https://docs.wandb.com/guides/runs/grouping).
+            wandb ouput file save path
+        :param timestamp:
+        """
         wandb.init(
             project=project_name,
             entity=user_name,
@@ -170,12 +173,18 @@ class BaseTrainer(ABC):
     def register_model(self, model, **kwargs):
         reuse = kwargs.get('reuse', False)
         is_trainable = kwargs.get('is_trainable', True)
+        self.learning_rate = kwargs.get('learning_rate', 1e-3)
 
-        if not reuse:
-            self.model = model.cuda()
-        else:
-            self.load_ckpt(mode='batch', is_trainable=is_trainable)
+        self.model = model.cuda()
         self.model = DDP(self.model, device_ids=[self.local_rank], output_device=self.local_rank)
+
+        if is_trainable:
+            self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate)
+            self.lr_scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, 1, gamma=0.9)
+            self.scaler = torch.cuda.amp.GradScaler()
+
+        if reuse:
+            self.load_ckpt(mode='batch', is_trainable=is_trainable)
 
     def save_ckpt(self, mode):
         if dist.get_rank() == 0:
@@ -205,19 +214,18 @@ class BaseTrainer(ABC):
         else:
             raise ValueError('Got an invalid dataset mode, ONLY SUPPORT: `batch`, `epoch` or `best`')
 
-        trainer_ckpt = torch.load(osp.join(path, 'trainer.bin'), map_location=torch.device('cuda'))
-        classifier_ckpt = torch.load(osp.join(path, 'classifier.bin'), map_location=torch.device('cuda'))
-
-        self.optimizer.load_state_dict(trainer_ckpt['optimizer'])
-        self.lr_scheduler.load_state_dict(trainer_ckpt['lr_scheduler'])
-        self.scaler.load_state_dict(trainer_ckpt['scaler'])
+        if is_trainable:
+            trainer_ckpt = torch.load(osp.join(path, 'trainer.bin'), map_location=torch.device('cuda'))
+            self.optimizer.load_state_dict(trainer_ckpt['optimizer'])
+            self.lr_scheduler.load_state_dict(trainer_ckpt['lr_scheduler'])
+            self.scaler.load_state_dict(trainer_ckpt['scaler'])
 
         # loading LoRA model
-        self.model.embedding = PeftModel.from_pretrained(self.model.module.embedding.base_model,
-                                                         path,
-                                                         is_trainable=is_trainable)
+        self.model.module.embedding.lora_embedding.unload()
+        self.model.module.embedding.lora_embedding.load_adapter(path, is_trainable=is_trainable, adapter_name='aaNER')
 
         # loading token classifier
+        classifier_ckpt = torch.load(osp.join(path, 'classifier.bin'), map_location=torch.device('cuda'))
         classifier_state_dict = self.model.module.classifier.state_dict()
         classifier_trained_dict = {k: v for k, v in classifier_ckpt['state_dict'].items() if k in classifier_state_dict}
         classifier_state_dict.update(classifier_trained_dict)
