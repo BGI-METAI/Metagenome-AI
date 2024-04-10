@@ -109,3 +109,36 @@ class SequentialDistributedSampler(Sampler):
 
     def __len__(self):
         return self.num_samples
+
+
+class CustomPEFTEmbeddingDataset(CustomNERDataset):
+    def __init__(
+            self,
+            incremental_protein_sequence_path: List[str],
+            tokenizer_model_name_or_path: str,
+            **kwargs
+    ):
+        super(CustomPEFTEmbeddingDataset, self).__init__(
+            processed_sequence_label_pairs_path=incremental_protein_sequence_path,
+            tokenizer_model_name_or_path=tokenizer_model_name_or_path,
+            **kwargs
+        )
+
+    def __getitem__(self, idx):
+        with open(self.pairs_path[idx], 'rb') as file:
+            data = pickle.load(file)
+        return {'seq': data['seq']}
+
+    def collate_fn(self, batch_sample):
+        batch_seq = []
+        for sample in batch_sample:
+            batch_seq.append(sample['seq'])
+
+        batch_seq = self.prepare_sequence(batch_seq)
+        tokens = self.tokenizer.batch_encode_plus(
+            batch_text_or_text_pairs=batch_seq,
+            padding='longest'
+        )
+        input_ids = torch.tensor(tokens['input_ids'])
+        attention_mask = torch.tensor(tokens['attention_mask'])
+        return input_ids, attention_mask

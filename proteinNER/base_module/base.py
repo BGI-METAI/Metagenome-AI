@@ -27,6 +27,7 @@ from torch.utils.data import DataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from proteinNER.base_module import CustomNERDataset, SequentialDistributedSampler
+from proteinNER.base_module.dataset import CustomPEFTEmbeddingDataset
 from proteinNER.classifier.model import ProtTransT5ForAAClassifier
 
 
@@ -129,19 +130,38 @@ class BaseTrainer(ABC):
             self,
             data_files,
             mode,
+            dataset_type='class',
             **kwargs
     ):
+        """
+
+        :param data_files: pickle files path list of protein sequence
+        :param mode: data loader type, optional, only support `train`, `test` and `valid`
+        :param dataset_type: dataset type, optional, only support `class` and `embed`
+
+        :return:
+        """
         self.batch_size = kwargs.get('batch_size', 1)
         model_name_or_path = kwargs.get('model_name_or_path')
         legacy = kwargs.get('legacy', False)
         do_lower_case = kwargs.get('do_lower_case', False)
 
-        dataset = CustomNERDataset(
-            processed_sequence_label_pairs_path=data_files,
-            tokenizer_model_name_or_path=model_name_or_path,
-            legacy=legacy,
-            do_lower_case=do_lower_case
-        )
+        if dataset_type == 'class':
+            dataset = CustomNERDataset(
+                processed_sequence_label_pairs_path=data_files,
+                tokenizer_model_name_or_path=model_name_or_path,
+                legacy=legacy,
+                do_lower_case=do_lower_case
+            )
+        elif dataset_type == 'embed':
+            dataset = CustomPEFTEmbeddingDataset(
+                incremental_protein_sequence_path=data_files,
+                tokenizer_model_name_or_path=model_name_or_path,
+                legacy=legacy,
+                do_lower_case=do_lower_case
+            )
+        else:
+            raise ValueError('Got an invalid dataset mode, ONLY SUPPORT: `class` and `embed`')
 
         if mode == 'train':
             train_sampler = torch.utils.data.distributed.DistributedSampler(dataset)
@@ -168,7 +188,7 @@ class BaseTrainer(ABC):
                 sampler=valid_sampler
             )
         else:
-            raise ValueError('Got an invalid dataset mode, ONLY SUPPORT: `train`, `test` and `valid`')
+            raise ValueError('Got an invalid data loader mode, ONLY SUPPORT: `train`, `test` and `valid`')
 
     def register_model(self, model, **kwargs):
         reuse = kwargs.get('reuse', False)
