@@ -91,17 +91,81 @@ class ProteinNERTrainer(BaseTrainer):
     @torch.no_grad()
     def valid_model_performance(self):
         self.model.eval()
-        total_tag = []
+        predicts = []
+        labels = []
         for sample in self.test_loader:
             input_ids, attention_mask, batch_label = sample
             logist = self.model(input_ids.cuda(), attention_mask.cuda())
             pred = torch.nn.functional.softmax(logist, dim=-1).argmax(-1)
-            correct = torch.eq(pred, batch_label.to(pred.device)).float().sum(1)
-            tag = (correct == pred.shape[-1]).float()
-            total_tag.append(tag)
-        total_tag = self.distributed_concat(torch.concat(total_tag, dim=0), len(self.test_loader))
-        accuracy = total_tag.sum() / len(total_tag)
+            predicts.append(pred)
+            labels.append(batch_label)
+        predicts = self.distributed_concat(torch.concat(predicts, dim=0), len(self.test_loader))
+        labels = self.distributed_concat(torch.concat(labels, dim=0), len(self.test_loader))
+        accuracy = self.accuracy_token_level(predicts, labels)
+        precision = self.precision_entity_level(predicts, labels)
         wandb.log({'Accuracy': np.mean(accuracy.item())})
+        wandb.log({'Precision': np.mean(precision)})
+
+    @staticmethod
+    def accuracy_token_level(predict, label):
+        return torch.eq(predict, label).float().mean()
+
+    def precision_entity_level(self, predict, label):
+        correct_dict = {i: 0 for i in range(1, label.max().item() + 1)}
+        predict_dict = {i: 0 for i in range(1, label.max().item() + 1)}
+        label_dict = {i: 0 for i in range(1, label.max().item() + 1)}
+
+        predict = predict.flatten()
+        label = label.flatten()
+        mask = label.bool()
+
+        correct_tag = (torch.eq(predict, label) * mask).float()
+        correct_start_pos, correct_end_pos = self.get_position_interval_of_consecutive_nonzero_values(correct_tag)
+        if correct_start_pos:
+            for pos in correct_start_pos:
+                correct_dict[label[pos].item()] += 1
+
+        predict_start_pos, predict_end_pos = self.get_position_interval_of_consecutive_nonzero_values(predict)
+        if predict_start_pos:
+            for pos in predict_start_pos:
+                predict_dict[label[pos].item()] += 1
+
+        label_start_pos, label_end_pos = self.get_position_interval_of_consecutive_nonzero_values(label)
+        if label_start_pos:
+            for pos in label_start_pos:
+                label_dict[label[pos].item()] += 1
+
+        precision_list = []
+        for k in correct_dict.keys():
+            precision_list.append(correct_dict[k] / predict_dict[k])
+        return precision_list
+
+    @staticmethod
+    def get_position_interval_of_consecutive_nonzero_values(data):
+        data = data.flatten()
+        nonzero_indices = torch.nonzero(data)
+        nonzero_values = data[nonzero_indices]
+        start_positions = []
+        end_positions = []
+
+        current_start = None
+        prev_value = None
+        for i in range(len(nonzero_indices)):
+            value = nonzero_values[i]
+            if current_start is None:
+                current_start = nonzero_indices[i]
+                prev_value = value
+            elif value != prev_value:
+                start_positions.append(current_start.item())
+                end_positions.append(nonzero_indices[i - 1].item())
+                current_start = nonzero_indices[i]
+                prev_value = value
+
+        if current_start is not None:
+            start_positions.append(current_start.item())
+            end_positions.append(nonzero_indices[-1].item())
+
+        return start_positions, end_positions
 
     @torch.no_grad()
     def inference(self, **kwargs):
