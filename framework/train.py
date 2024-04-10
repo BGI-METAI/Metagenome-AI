@@ -284,7 +284,7 @@ def train_classifier(rank, config, world_size):
         if rank == 0:
             timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
             logger = init_logger(timestamp)
-            init_wandb(config["model_folder"], classifier, timestamp)
+            #init_wandb(config["model_folder"], classifier, timestamp)  #bacilo mi error pa sam zakomentarisao
 
         # To wait for wandb to get initialized
         dist.barrier()
