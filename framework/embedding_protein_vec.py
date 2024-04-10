@@ -37,11 +37,11 @@ class ProteinVecEmbedding(Embedding):
         self.model_deep = self.model_deep.to(self.device)
         self.model_deep = self.model_deep.eval()
 
-        self.batch_converter = self.tokenizer.get_batch_converter()  # TODO: Check if tokenizer has this method!
+        #self.batch_converter = self.tokenizer.get_batch_converter()  # TODO: Check if tokenizer has this method!
 
     def get_embedding(self, batch, pooling='cls'):
-        data = [(fam, seq) for fam, seq in zip(batch["family"], batch["sequence"])]
-        _, _, batch_tokens = self.batch_converter(data)
+        #data = [(fam, seq) for fam, seq in zip(batch["family"], batch["sequence"])]
+        #_, _, batch_tokens = self.batch_converter(data)
 
         # This is a forward pass of the Protein-Vec model
         # Every aspect is turned on (therefore no masks)
@@ -49,12 +49,23 @@ class ProteinVecEmbedding(Embedding):
         all_cols = np.array(['TM', 'PFAM', 'GENE3D', 'ENZYME', 'MFO', 'BPO', 'CCO'])
         masks = [all_cols[k] in sampled_keys for k in range(len(all_cols))]
         masks = torch.logical_not(torch.tensor(masks, dtype=torch.bool))[None,:]
+        
+        #Pull out sequences for the new proteins
+        flat_seqs = batch["sequence"]   #ovde puca zato sto mu ne odgovara batch izgkeda da nije data frame
 
-        with torch.no_grad():
-            protrans_sequence = featurize_prottrans(data, self.model, self.tokenizer, self.device)
-            embedded_sequence = embed_vec(protrans_sequence, self.model_deep, masks, self.device)
+        #Loop through the sequences and embed them using protein-vec
+        i = 0
+        embed_all_sequences_in_batch = []
+        while i < len(flat_seqs): 
+            protrans_sequence = featurize_prottrans(flat_seqs[i:i+1], self.model, self.tokenizer, self.device) #firt make embading using ProTrans pretrained model
+            embedded_sequence = embed_vec(protrans_sequence, self.model_deep, masks, self.device) #than use protrens embedings to get embedings from protein-vec model
+            embed_all_sequences_in_batch.append(embedded_sequence)
 
-        return embedded_sequence  # TODO: Check if format of this embeddings is aligned with classifier layers
+        # with torch.no_grad():
+        #     protrans_sequence = featurize_prottrans(data, self.model, self.tokenizer, self.device)
+        #     embedded_sequence = embed_vec(protrans_sequence, self.model_deep, masks, self.device)
+
+        return embed_all_sequences_in_batch  # TODO: Check if format of this embeddings is aligned with classifier layers
 
 
     def get_embedding_dim(self):
