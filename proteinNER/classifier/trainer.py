@@ -7,6 +7,7 @@
 import wandb
 import torch
 import torch.distributed as dist
+import torch.nn.functional as F
 import numpy as np
 
 from tqdm import tqdm
@@ -51,8 +52,9 @@ class ProteinNERTrainer(BaseTrainer):
             batch_iterator = tqdm(self.train_loader, desc=f'Eph: {eph:03d}')
             for idx, sample in enumerate(batch_iterator):
                 input_ids, attention_mask, batch_label = sample
+                input_ids, attention_mask, batch_label = input_ids.cuda(), attention_mask.cuda(), batch_label.cuda()
                 with torch.cuda.amp.autocast():
-                    logist = self.model(input_ids.cuda(), attention_mask.cuda())
+                    logist = self.model(input_ids, attention_mask)
                     loss = ProteinLoss.focal_loss(
                         pred=logist.permute(0, 2, 1),
                         target=batch_label,
@@ -82,38 +84,43 @@ class ProteinNERTrainer(BaseTrainer):
                 self.save_ckpt(mode='best')
 
     @staticmethod
-    def distributed_concat(tensor, num_total_examples):
+    def distributed_concat(tensor):
         output_tensor = [tensor.clone() for _ in range(dist.get_world_size())]
         dist.all_gather(output_tensor, tensor)
         concat = torch.cat(output_tensor, dim=0)
-        return concat[:num_total_examples]
+        return concat
 
     @torch.no_grad()
     def valid_model_performance(self):
         self.model.eval()
-        predicts = []
-        labels = []
+        accuracy = []
+        precision = []
         for sample in self.test_loader:
             input_ids, attention_mask, batch_label = sample
-            logist = self.model(input_ids.cuda(), attention_mask.cuda())
+            input_ids, attention_mask, batch_label = input_ids.cuda(), attention_mask.cuda(), batch_label.cuda()
+            logist = self.model(input_ids, attention_mask)
             pred = torch.nn.functional.softmax(logist, dim=-1).argmax(-1)
-            predicts.append(pred)
-            labels.append(batch_label)
-        predicts = self.distributed_concat(torch.concat(predicts, dim=0), len(self.test_loader))
-        labels = self.distributed_concat(torch.concat(labels, dim=0), len(self.test_loader))
-        accuracy = self.accuracy_token_level(predicts, labels)
-        precision = self.precision_entity_level(predicts, labels)
-        wandb.log({'Accuracy': np.mean(accuracy.item())})
-        wandb.log({'Precision': np.mean(precision)})
+
+            acc = self.accuracy_token_level(predict=pred, label=batch_label)
+            accuracy.append(acc.unsqueeze(dim=0))
+
+            pres = self.precision_entity_level(predict=pred, label=batch_label)
+            precision.append(pres.unsqueeze(dim=0))
+
+        accuracy = self.distributed_concat(torch.cat(accuracy, dim=0))
+        precision = self.distributed_concat(torch.cat(precision, dim=0))
+
+        wandb.log({'Accuracy (Token Level)': np.mean(accuracy.item())})
+        wandb.log({'Precision (Entity Level)': np.mean(precision)})
 
     @staticmethod
     def accuracy_token_level(predict, label):
         return torch.eq(predict, label).float().mean()
 
     def precision_entity_level(self, predict, label):
-        correct_dict = {i: 0 for i in range(1, label.max().item() + 1)}
-        predict_dict = {i: 0 for i in range(1, label.max().item() + 1)}
-        label_dict = {i: 0 for i in range(1, label.max().item() + 1)}
+        correct_dict = {i: torch.zeros(1).cuda() for i in range(1, self.model.module.classifier.out_features)}
+        predict_dict = {i: torch.zeros(1).cuda() for i in range(1, self.model.module.classifier.out_features)}
+        label_dict = {i: torch.zeros(1).cuda() for i in range(1, self.model.module.classifier.out_features)}
 
         predict = predict.flatten()
         label = label.flatten()
@@ -137,8 +144,15 @@ class ProteinNERTrainer(BaseTrainer):
 
         precision_list = []
         for k in correct_dict.keys():
-            precision_list.append(correct_dict[k] / predict_dict[k])
-        return precision_list
+            if predict_dict[k] == 0 and label_dict[k] == 0:
+                continue
+
+            if predict_dict[k] == 0:
+                score = torch.zeros(1).cuda()
+            else:
+                score = correct_dict[k] / predict_dict[k]
+            precision_list.append(score)
+        return torch.tensor(precision_list).cuda().float().mean()
 
     @staticmethod
     def get_position_interval_of_consecutive_nonzero_values(data):
