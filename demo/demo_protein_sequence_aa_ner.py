@@ -6,6 +6,8 @@
 # @Email   : zhangchao5@genomics.cn
 import argparse
 import sys
+import random
+import os
 
 sys.path.insert(0, "..")
 
@@ -46,7 +48,7 @@ def register_parameters():
     parser.add_argument('--add_background', type=bool, default=True, help='add background type to the final categories')
 
     parser.add_argument('--epoch', type=int, default=100)
-    parser.add_argument('--learning_rate', type=float, default=5e-6)
+    parser.add_argument('--learning_rate', type=float, default=1e-6)
     parser.add_argument('--loss_weight', type=float, default=1.)
     parser.add_argument('--patience', type=int, default=4)
     parser.add_argument('--load_best_model', type=bool, default=True)
@@ -61,7 +63,7 @@ def register_parameters():
 
 
 def worker():
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
     args = register_parameters()
 
     # prepare dataset
@@ -69,6 +71,8 @@ def worker():
     with open(args.train_data_path, 'r') as file:
         for line in file.readlines():
             train_files.extend(line.strip().split(' '))
+    random.seed(args.seed)
+    random.shuffle(train_files)
 
     test_files = []
     with open(args.test_data_path, 'r') as file:
@@ -82,6 +86,7 @@ def worker():
     trainer.register_dataset(
         data_files=train_files,
         mode='train',
+        dataset_type='class',
         batch_size=args.batch_size,
         model_name_or_path=args.model_path_or_name
     )
@@ -89,6 +94,7 @@ def worker():
     trainer.register_dataset(
         data_files=test_files,
         mode='test',
+        dataset_type='class',
         batch_size=args.batch_size,
         model_name_or_path=args.model_path_or_name
     )
@@ -99,7 +105,7 @@ def worker():
         lora_inference_mode=False,
         lora_r=8,
         lora_alpha=32,
-        lora_dropout=0.1,
+        lora_dropout=0.01,
     )
     trainer.register_model(model=model, reuse=args.reuse, is_trainable=args.is_trainable)
 
