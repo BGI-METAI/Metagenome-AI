@@ -60,10 +60,9 @@ class ProteinVecEmbedding(Embedding):
             protrans_sequence = featurize_prottrans(flat_seqs[i:i+1], self.model, self.tokenizer, self.device) #firt make embading using ProTrans pretrained model
             embedded_sequence = embed_vec(protrans_sequence, self.model_deep, masks, self.device) #than use protrens embedings to get embedings from protein-vec model
             embed_all_sequences_in_batch.append(embedded_sequence)
+            i = i + 1
 
-        # with torch.no_grad():
-        #     protrans_sequence = featurize_prottrans(data, self.model, self.tokenizer, self.device)
-        #     embedded_sequence = embed_vec(protrans_sequence, self.model_deep, masks, self.device)
+        embed_all_sequences_in_batch = torch.Tensor(embed_all_sequences_in_batch) #convert from list to tensor
 
         return embed_all_sequences_in_batch  # TODO: Check if format of this embeddings is aligned with classifier layers
 
