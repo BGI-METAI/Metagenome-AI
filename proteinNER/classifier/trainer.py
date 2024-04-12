@@ -9,6 +9,7 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 import numpy as np
+import pickle
 
 from tqdm import tqdm
 from datetime import datetime
@@ -23,7 +24,7 @@ class ProteinNERTrainer(BaseTrainer):
         super(ProteinNERTrainer, self).__init__(**kwargs)
 
     def train(self, **kwargs):
-        max_epoch = kwargs.get('epoch', 100)
+        max_epoch = kwargs.get('epoch', 1)  # 100
         loss_weight = kwargs.get('loss_weight', 1.)
         patience = kwargs.get('patience', 4)
         load_best_model = kwargs.get('load_best_model', True)
@@ -183,4 +184,60 @@ class ProteinNERTrainer(BaseTrainer):
 
     @torch.no_grad()
     def inference(self, **kwargs):
-        pass
+        label_dict_path = kwargs.get('username')
+        model = self.load_ckpt(mode='best')
+        model.eval()
+        length_threshold = 3
+        for sample in self.test_loader:
+            input_ids, attention_mask, batch_label = sample
+            logist = model(input_ids.cuda(), attention_mask.cuda())
+            pred = torch.nn.functional.softmax(logist, dim=-1).argmax(-1)
+
+            index_list = torch.nonzero(pred != 0, as_tuple=False)
+            nonzero_label = pred[index_list[:, 0], index_list[:, 1]]
+
+            diff_indices = torch.nonzero(nonzero_label[1:] != nonzero_label[:-1]).squeeze()
+            diff_indices = torch.cat([torch.tensor([0]), diff_indices]) if diff_indices[0] != 0 else diff_indices
+            diff_indices = torch.cat([diff_indices, torch.tensor([len(nonzero_label) - 1])])
+
+            diff_mask = index_list[:, 1][1:] - index_list[:, 1][:-1]  # 蛋白质分割（看gap的大小和负值情况）
+            single_indices = torch.nonzero(diff_mask < 0, as_tuple=True)[0]
+            single_indices = torch.cat([torch.tensor([0]), single_indices])
+
+            batch_location_list = []
+            batch_label_name_list = []
+            location_list = []
+            label_name_list = []
+
+            for i in range(len(diff_indices)):
+                if diff_indices[i] in single_indices:
+                    batch_location_list.append(location_list) if len(location_list) != 0 else None
+                    batch_label_name_list.append(label_name_list) if len(label_name_list) != 0 else None
+                    location_list = []
+                    label_name_list = []
+                if i == 0:
+                    start_position = index_list[:, 1][diff_indices[i]].item()
+                    end_position = index_list[:, 1][diff_indices[i + 1]].item()
+                    if (end_position - start_position) + 1 >= length_threshold:
+                        location_list.append([start_position, end_position])
+                        label_name = self.convert_label(label_dict_path,nonzero_label[diff_indices[i] + 1])
+                        label_name_list.append(label_name)
+                elif i < len(diff_indices) - 1:
+                    start_position = index_list[:, 1][diff_indices[i] + 1].item()
+                    end_position = index_list[:, 1][diff_indices[i + 1]].item()
+                    if (end_position - start_position)+1 >= length_threshold:# [1,3]位置为1，2，3.因此长度为3-1+1
+                        location_list.append([start_position, end_position])
+                        label_name = self.convert_label(label_dict_path,nonzero_label[diff_indices[i] + 1])
+                        label_name_list.append(label_name)
+                else:
+                    batch_location_list.append(location_list) if len(location_list) != 0 else None
+                    batch_label_name_list.append(label_name_list) if len(label_name_list) != 0 else None
+
+
+    @staticmethod
+    def convert_label(label_dict_path, label_id):
+        with open(label_dict_path, "rb") as f:
+            label_dict = pickle.load(f)
+        label_name = label_dict[label_id.item()]
+        return label_name
+
