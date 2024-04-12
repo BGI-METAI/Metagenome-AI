@@ -184,7 +184,7 @@ class ProteinNERTrainer(BaseTrainer):
 
     @torch.no_grad()
     def inference(self, **kwargs):
-        label_dict_path = kwargs.get('username')
+        label_dict_path = kwargs.get('label_dict_path')
         model = self.load_ckpt(mode='best')
         model.eval()
         length_threshold = 3

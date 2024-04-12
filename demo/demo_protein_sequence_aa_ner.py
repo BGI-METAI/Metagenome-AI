@@ -76,6 +76,7 @@ def worker():
     os.environ['WORLD_SIZE'] = '1'
     args = register_parameters()
 
+
     # prepare dataset
     train_files = []
     with open(args.train_data_path, 'r') as file:
