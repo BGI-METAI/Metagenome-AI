@@ -45,7 +45,7 @@ def register_parameters():
         default='/home/share/huadjyin/home/s_cenweixuan/weight/prot_t5_xl_half_uniref50-enc',
         help='pretrianed pLM model path or name'
     )
-
+    parser.add_argument('--inference_length_threshold', type=int, default=3, help='inference domain length threshold')
     parser.add_argument('--seed', type=int, default=42, help='random seed')
     parser.add_argument('--batch_size', type=int, default=2, help='batch size') # 3
     parser.add_argument('--num_classes', type=int, default=6595,
@@ -80,17 +80,21 @@ def worker():
     # prepare dataset
     train_files = []
     with open(args.train_data_path, 'r') as file:
-        if len(train_files) < 6:
-            for line in file.readlines():
+        for line in file.readlines():
+            if len(train_files) < 6:
                 train_files.extend(line.strip().split(' '))
+            else:
+                break
     random.seed(args.seed)
     random.shuffle(train_files)
 
     test_files = []
     with open(args.test_data_path, 'r') as file:
-        if len(test_files) < 6:
-            for line in file.readlines():
+        for line in file.readlines():
+            if len(test_files) < 6:
                 test_files.extend(line.strip().split(' '))
+            else:
+                break
 
     # initialize trainer class
     trainer = ProteinNERTrainer(output_home=args.output_home)

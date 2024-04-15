@@ -105,14 +105,14 @@ class ProteinNERTrainer(BaseTrainer):
             acc = self.accuracy_token_level(predict=pred, label=batch_label)
             accuracy.append(acc.unsqueeze(dim=0))
 
-            pres = self.precision_entity_level(predict=pred, label=batch_label)
-            precision.append(pres.unsqueeze(dim=0))
+            # pres = self.precision_entity_level(predict=pred, label=batch_label)
+            # precision.append(pres.unsqueeze(dim=0))
 
         accuracy = self.distributed_concat(torch.cat(accuracy, dim=0))
-        precision = self.distributed_concat(torch.cat(precision, dim=0))
+        # precision = self.distributed_concat(torch.cat(precision, dim=0))
 
-        wandb.log({'Accuracy (Token Level)': np.mean(accuracy.item())})
-        wandb.log({'Precision (Entity Level)': np.mean(precision)})
+        # wandb.log({'Accuracy (Token Level)': np.mean(accuracy.item())})报错，不知道咋解决 [Errno 32] Broken pipe
+        # wandb.log({'Precision (Entity Level)': np.mean(precision)})
 
     @staticmethod
     def accuracy_token_level(predict, label):
@@ -184,25 +184,30 @@ class ProteinNERTrainer(BaseTrainer):
 
     @torch.no_grad()
     def inference(self, **kwargs):
-        label_dict_path = kwargs.get('label_dict_path')
-        model = self.load_ckpt(mode='best')
-        model.eval()
-        length_threshold = 3
+        label_dict_path = kwargs.get('label_dict_path','.')
+        output_home = kwargs.get('output_home', '.')
+        length_threshold = kwargs.get('inference_length_threshold',3)
+
+        self.load_ckpt(mode='best')  # 导入报错，不知道咋解决
+        self.model.eval()
+
+        file_name = 0
         for sample in self.test_loader:
+            file_name += 1
             input_ids, attention_mask, batch_label = sample
-            logist = model(input_ids.cuda(), attention_mask.cuda())
+            logist = self.model(input_ids.cuda(), attention_mask.cuda())
             pred = torch.nn.functional.softmax(logist, dim=-1).argmax(-1)
 
             index_list = torch.nonzero(pred != 0, as_tuple=False)
             nonzero_label = pred[index_list[:, 0], index_list[:, 1]]
 
             diff_indices = torch.nonzero(nonzero_label[1:] != nonzero_label[:-1]).squeeze()
-            diff_indices = torch.cat([torch.tensor([0]), diff_indices]) if diff_indices[0] != 0 else diff_indices
             diff_indices = torch.cat([diff_indices, torch.tensor([len(nonzero_label) - 1])])
 
             diff_mask = index_list[:, 1][1:] - index_list[:, 1][:-1]  # 蛋白质分割（看gap的大小和负值情况）
             single_indices = torch.nonzero(diff_mask < 0, as_tuple=True)[0]
-            single_indices = torch.cat([torch.tensor([0]), single_indices])
+            diff_indices = torch.cat((diff_indices, single_indices)).unique().sort()[0]
+            diff_indices = torch.cat([torch.tensor([0]), diff_indices])
 
             batch_location_list = []
             batch_label_name_list = []
@@ -213,8 +218,9 @@ class ProteinNERTrainer(BaseTrainer):
                 if diff_indices[i] in single_indices:
                     batch_location_list.append(location_list) if len(location_list) != 0 else None
                     batch_label_name_list.append(label_name_list) if len(label_name_list) != 0 else None
-                    location_list = []
-                    label_name_list = []
+                    location_list.clear()
+                    label_name_list.clear()
+
                 if i == 0:
                     start_position = index_list[:, 1][diff_indices[i]].item()
                     end_position = index_list[:, 1][diff_indices[i + 1]].item()
@@ -232,6 +238,10 @@ class ProteinNERTrainer(BaseTrainer):
                 else:
                     batch_location_list.append(location_list) if len(location_list) != 0 else None
                     batch_label_name_list.append(label_name_list) if len(label_name_list) != 0 else None
+            with open(output_home+'/inference_protein_location_label_batch'+str(file_name)+'.txt','w') as f:
+                f.write('Sequence' + '\t' + 'Location([start, end])' + '\t' + 'Predicted_label' + '\n')
+                for j in range(len(batch_label_name_list)):
+                    f.write('ABC...' + '\t' + str(batch_location_list[j]) + '\t' + str(batch_label_name_list[j]) + '\n')
 
 
     @staticmethod
