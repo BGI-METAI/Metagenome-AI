@@ -69,11 +69,6 @@ def register_parameters():
 
 def worker():
     os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
-    os.environ['RANK'] = '0'
-    os.environ["LOCAL_RANK"] = "0"
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '18278'
-    os.environ['WORLD_SIZE'] = '1'
     args = register_parameters()
 
 

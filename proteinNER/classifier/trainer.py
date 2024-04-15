@@ -111,7 +111,7 @@ class ProteinNERTrainer(BaseTrainer):
         accuracy = self.distributed_concat(torch.cat(accuracy, dim=0))
         # precision = self.distributed_concat(torch.cat(precision, dim=0))
 
-        # wandb.log({'Accuracy (Token Level)': np.mean(accuracy.item())})报错，不知道咋解决 [Errno 32] Broken pipe
+        wandb.log({'Accuracy (Token Level)': np.mean(accuracy.mean().item())})
         # wandb.log({'Precision (Entity Level)': np.mean(precision)})
 
     @staticmethod
@@ -188,7 +188,7 @@ class ProteinNERTrainer(BaseTrainer):
         output_home = kwargs.get('output_home', '.')
         length_threshold = kwargs.get('inference_length_threshold',3)
 
-        self.load_ckpt(mode='best')  # 导入报错，不知道咋解决
+        self.load_ckpt(mode='best')
         self.model.eval()
 
         file_name = 0
@@ -202,12 +202,12 @@ class ProteinNERTrainer(BaseTrainer):
             nonzero_label = pred[index_list[:, 0], index_list[:, 1]]
 
             diff_indices = torch.nonzero(nonzero_label[1:] != nonzero_label[:-1]).squeeze()
-            diff_indices = torch.cat([diff_indices, torch.tensor([len(nonzero_label) - 1])])
+            diff_indices = torch.cat([diff_indices, torch.tensor([len(nonzero_label) - 1]).cuda()])
 
             diff_mask = index_list[:, 1][1:] - index_list[:, 1][:-1]  # 蛋白质分割（看gap的大小和负值情况）
             single_indices = torch.nonzero(diff_mask < 0, as_tuple=True)[0]
             diff_indices = torch.cat((diff_indices, single_indices)).unique().sort()[0]
-            diff_indices = torch.cat([torch.tensor([0]), diff_indices])
+            diff_indices = torch.cat([torch.tensor([0]).cuda(), diff_indices])
 
             batch_location_list = []
             batch_label_name_list = []
@@ -218,8 +218,8 @@ class ProteinNERTrainer(BaseTrainer):
                 if diff_indices[i] in single_indices:
                     batch_location_list.append(location_list) if len(location_list) != 0 else None
                     batch_label_name_list.append(label_name_list) if len(label_name_list) != 0 else None
-                    location_list.clear()
-                    label_name_list.clear()
+                    location_list=[]
+                    label_name_list=[]
 
                 if i == 0:
                     start_position = index_list[:, 1][diff_indices[i]].item()
