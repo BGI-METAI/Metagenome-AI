@@ -47,12 +47,12 @@ def register_parameters():
     )
     parser.add_argument('--inference_length_threshold', type=int, default=3, help='inference domain length threshold')
     parser.add_argument('--seed', type=int, default=42, help='random seed')
-    parser.add_argument('--batch_size', type=int, default=2, help='batch size') # 3
+    parser.add_argument('--batch_size', type=int, default=3, help='batch size')
     parser.add_argument('--num_classes', type=int, default=6595,
                         help='the number of categories')  # PFAM: 20794, GENE3D: 6595
     parser.add_argument('--add_background', type=bool, default=True, help='add background type to the final categories')
 
-    parser.add_argument('--epoch', type=int, default=1)  # 100
+    parser.add_argument('--epoch', type=int, default=3)  # 100
     parser.add_argument('--learning_rate', type=float, default=1e-6)
     parser.add_argument('--loss_weight', type=float, default=1.)
     parser.add_argument('--patience', type=int, default=4)
@@ -68,7 +68,7 @@ def register_parameters():
 
 
 def worker():
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2, 3"
     args = register_parameters()
 
 
@@ -76,7 +76,7 @@ def worker():
     train_files = []
     with open(args.train_data_path, 'r') as file:
         for line in file.readlines():
-            if len(train_files) < 6:
+            if len(train_files) < 100:
                 train_files.extend(line.strip().split(' '))
             else:
                 break
@@ -86,7 +86,7 @@ def worker():
     test_files = []
     with open(args.test_data_path, 'r') as file:
         for line in file.readlines():
-            if len(test_files) < 6:
+            if len(test_files) < 100:
                 test_files.extend(line.strip().split(' '))
             else:
                 break
