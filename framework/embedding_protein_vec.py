@@ -45,7 +45,8 @@ class ProteinVecEmbedding(Embedding):
 
         # This is a forward pass of the Protein-Vec model
         # Every aspect is turned on (therefore no masks)
-        sampled_keys = np.array(['TM', 'PFAM', 'GENE3D', 'ENZYME', 'MFO', 'BPO', 'CCO'])
+        #sampled_keys = np.array(['TM', 'PFAM', 'GENE3D', 'ENZYME', 'MFO', 'BPO', 'CCO'])
+        sampled_keys = np.array(['PFAM'])  #have to define the annotation that is in usage
         all_cols = np.array(['TM', 'PFAM', 'GENE3D', 'ENZYME', 'MFO', 'BPO', 'CCO'])
         masks = [all_cols[k] in sampled_keys for k in range(len(all_cols))]
         masks = torch.logical_not(torch.tensor(masks, dtype=torch.bool))[None,:]
@@ -63,7 +64,8 @@ class ProteinVecEmbedding(Embedding):
             i = i + 1
 
         embed_all_sequences_in_batch = torch.Tensor(embed_all_sequences_in_batch) #convert from list to tensor
-
+        embed_all_sequences_in_batch.squeeze_()
+        embed_all_sequences_in_batch = embed_all_sequences_in_batch.to(self.device) #radi i bez ovoga pitanje je zasto?
         return embed_all_sequences_in_batch  # TODO: Check if format of this embeddings is aligned with classifier layers
 
 

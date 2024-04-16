@@ -356,8 +356,8 @@ def train_classifier(rank, config, world_size):
 
             # Calculate average loss
             train_loss_avg = torch.stack(train_loss_gather).mean().item()
-            if rank == 0:
-                wandb.log({"train_loss": train_loss_avg})
+            # if rank == 0:     #zakomentarisao da bi radilo
+            #     wandb.log({"train_loss": train_loss_avg})
 
             # Validation loop
             if rank == 0:
@@ -391,9 +391,9 @@ def train_classifier(rank, config, world_size):
                 acc = acc / len(val_dataloader)
                 f1 = f1 / len(val_dataloader)
                 val_loss = val_loss / len(val_dataloader)
-                wandb.log({"val_loss": val_loss})
-                wandb.log({"accuracy": acc})
-                wandb.log({"f1_score": f1})
+                # wandb.log({"val_loss": val_loss})     #zakomentarisao da bi radilo
+                # wandb.log({"accuracy": acc})
+                # wandb.log({"f1_score": f1})
 
 
                 logger.warning(
