@@ -12,6 +12,7 @@ import numpy as np
 
 from tqdm import tqdm
 from datetime import datetime
+from contextlib import nullcontext
 
 from proteinNER.base_module import BaseTrainer
 from proteinNER.base_module.utils import EarlyStopper
@@ -27,6 +28,7 @@ class ProteinNERTrainer(BaseTrainer):
         loss_weight = kwargs.get('loss_weight', 1.)
         patience = kwargs.get('patience', 4)
         load_best_model = kwargs.get('load_best_model', True)
+        k = kwargs.get('k', 10)
 
         wandb_username = kwargs.get('username')
         wandb_project = kwargs.get('project')
@@ -50,27 +52,35 @@ class ProteinNERTrainer(BaseTrainer):
             self.model.train()
             self.train_loader.sampler.set_epoch(eph)
             batch_iterator = tqdm(self.train_loader, desc=f'Eph: {eph:03d}')
+
+            self.optimizer.zero_grad()
             for idx, sample in enumerate(batch_iterator):
                 input_ids, attention_mask, batch_label = sample
                 input_ids, attention_mask, batch_label = input_ids.cuda(), attention_mask.cuda(), batch_label.cuda()
-                with torch.cuda.amp.autocast():
-                    logist = self.model(input_ids, attention_mask)
-                    loss = ProteinLoss.focal_loss(
-                        pred=logist.permute(0, 2, 1),
-                        target=batch_label,
-                        weight=loss_weight,
-                        gamma=2.
-                    )
 
-                batch_iterator.set_postfix({'Loss': f'{loss.item():.4f}'})
-                eph_loss.append(loss.item())
-                wandb.log({'loss': loss.item()})
+                custom_context = self.model.no_sync if idx % k != 0 else nullcontext
+                with custom_context():
+                    with torch.cuda.amp.autocast():
+                        logist = self.model(input_ids, attention_mask)
+                        loss = ProteinLoss.focal_loss(
+                            pred=logist.permute(0, 2, 1),
+                            target=batch_label,
+                            weight=loss_weight,
+                            gamma=2.
+                        )
 
-                self.optimizer.zero_grad()
-                self.scaler.scale(loss).backward()
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-                if self.save_in_batch and idx % 10 == 0:
+                    self.scaler.scale(loss).backward()
+
+                    batch_iterator.set_postfix({'Loss': f'{loss.item():.4f}'})
+                    eph_loss.append(loss.item())
+                    wandb.log({'loss': loss.item()})
+
+                if idx % k == 0:
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                    self.optimizer.zero_grad()
+
+                if self.save_in_batch and idx % k == 0:
                     self.save_ckpt('batch')
             self.lr_scheduler.step()
             self.valid_model_performance()
@@ -110,7 +120,7 @@ class ProteinNERTrainer(BaseTrainer):
         accuracy = self.distributed_concat(torch.cat(accuracy, dim=0))
         precision = self.distributed_concat(torch.cat(precision, dim=0))
 
-        wandb.log({'Accuracy (Token Level)': np.mean(accuracy.item())})
+        wandb.log({'Accuracy (Token Level)': accuracy.mean().item()})
         wandb.log({'Precision (Entity Level)': np.mean(precision)})
 
     @staticmethod
