@@ -32,7 +32,7 @@ def register_parameters():
     parser.add_argument(
         '--output_home',
         type=str,
-        default='/home/share/huadjyin/home/zhangchao5/code/ProtT5/output',
+        default='/home/share/huadjyin/home/zhangchao5/code/ProtT5/output_debug',
     )
     parser.add_argument(
         '--model_path_or_name',
@@ -50,7 +50,7 @@ def register_parameters():
     parser.add_argument('--epoch', type=int, default=100)
     parser.add_argument('--learning_rate', type=float, default=1e-6)
     parser.add_argument('--loss_weight', type=float, default=1.)
-    parser.add_argument('--patience', type=int, default=4)
+    parser.add_argument('--patience', type=int, default=1)
     parser.add_argument('--k', type=int, default=200, help='Gradient accumulation parameters')
     parser.add_argument('--load_best_model', type=bool, default=True)
     parser.add_argument('--reuse', type=bool, default=False)
@@ -81,11 +81,11 @@ def worker():
             test_files.extend(line.strip().split(' '))
 
     # initialize trainer class
-    trainer = ProteinNERTrainer(output_home=args.output_home)
+    trainer = ProteinNERTrainer(output_home=args.output_home, k=args.k)
 
     # register dataset
     trainer.register_dataset(
-        data_files=train_files,
+        data_files=train_files[:2000],
         mode='train',
         dataset_type='class',
         batch_size=args.batch_size,
@@ -93,7 +93,7 @@ def worker():
     )
 
     trainer.register_dataset(
-        data_files=test_files,
+        data_files=test_files[200],
         mode='test',
         dataset_type='class',
         batch_size=args.batch_size,
