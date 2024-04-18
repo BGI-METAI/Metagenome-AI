@@ -32,9 +32,9 @@ def query(index, queries, k=10):
 
 def featurize_prottrans(sequences, model, tokenizer, device): 
     
-    sequences = [(" ".join(sequences[i])) for i in range(len(sequences))]
+    sequences = [(" ".join(sequences[i])) for i in range(len(sequences))] #TODO 
     sequences = [re.sub(r"[UZOB]", "X", sequence) for sequence in sequences]
-    ids = tokenizer.batch_encode_plus(sequences, add_special_tokens=True, padding=True)
+    ids = tokenizer.batch_encode_plus(sequences, add_special_tokens=True, padding=True) #make tokenization for all sequences, addpecial tokens, padding to the longest sequence
     input_ids = torch.tensor(ids['input_ids']).to(device)
     attention_mask = torch.tensor(ids['attention_mask']).to(device)
 
@@ -43,14 +43,18 @@ def featurize_prottrans(sequences, model, tokenizer, device):
 
     embedding = embedding.last_hidden_state.cpu().numpy()
 
-    features = [] 
-    for seq_num in range(len(embedding)):
-        seq_len = (attention_mask[seq_num] == 1).sum()
-        seq_emd = embedding[seq_num][:seq_len-1]
-        features.append(seq_emd)
+    ##code for single sequence 
+    # features = [] 
+    # for seq_num in range(len(embedding)):   #this loop only from paded sequences make sequenceeses of original length
+    #     seq_len = (attention_mask[seq_num] == 1).sum()
+    #     seq_emd = embedding[seq_num][:seq_len-1]
+    #     features.append(seq_emd)
     
-    prottrans_embedding = torch.tensor(features[0])
-    prottrans_embedding = torch.unsqueeze(prottrans_embedding, 0).to(device)
+    # prottrans_embedding = torch.tensor(features[0])   
+    # prottrans_embedding = torch.unsqueeze(prottrans_embedding, 0).to(device)  
+
+    prottrans_embedding = torch.tensor(embedding)
+    prottrans_embedding = prottrans_embedding.to(device)
     
     return(prottrans_embedding)
 
