@@ -37,6 +37,9 @@ class ProteinVecEmbedding(Embedding):
         self.model_deep = self.model_deep.to(self.device)
         self.model_deep = self.model_deep.eval()
 
+        print('Number of parameters in ProTrans model: ', sum(p.numel() for p in  self.model.parameters()))
+        print('Number of parameters in ProtVec model: ', sum(p.numel() for p in  self.model_deep.parameters()))
+
         #self.batch_converter = self.tokenizer.get_batch_converter()  # TODO: Check if tokenizer has this method!
 
     def get_embedding(self, batch, pooling='cls'):
@@ -52,19 +55,23 @@ class ProteinVecEmbedding(Embedding):
         masks = torch.logical_not(torch.tensor(masks, dtype=torch.bool))[None,:]
         
         #Pull out sequences for the new proteins
-        flat_seqs = batch["sequence"]   #ovde puca zato sto mu ne odgovara batch izgkeda da nije data frame
+        flat_seqs = batch["sequence"] 
 
-        #Loop through the sequences and embed them using protein-vec
-        i = 0
-        embed_all_sequences_in_batch = []
-        while i < len(flat_seqs): 
-            protrans_sequence = featurize_prottrans(flat_seqs[i:i+1], self.model, self.tokenizer, self.device) #firt make embading using ProTrans pretrained model
-            embedded_sequence = embed_vec(protrans_sequence, self.model_deep, masks, self.device) #than use protrens embedings to get embedings from protein-vec model
-            embed_all_sequences_in_batch.append(embedded_sequence)
-            i = i + 1
+        protrans_sequence = featurize_prottrans(flat_seqs, self.model, self.tokenizer, self.device) #firt make embading using ProTrans pretrained model
+        embed_all_sequences_in_batch = embed_vec(protrans_sequence, self.model_deep, masks, self.device) #than use protrens embedings to get embedings from protein-vec model  
+        print(embed_all_sequences_in_batch.shape)
+
+        # # Loop through the sequences and embed them using protein-vec
+        # i = 0
+        # embed_all_sequences_in_batch = []
+        # while i < len(flat_seqs): 
+        #     protrans_sequence = featurize_prottrans(flat_seqs[i:i+1], self.model, self.tokenizer, self.device) #firt make embading using ProTrans pretrained model
+        #     embedded_sequence = embed_vec(protrans_sequence, self.model_deep, masks, self.device) #than use protrens embedings to get embedings from protein-vec model
+        #     embed_all_sequences_in_batch.append(embedded_sequence)
+        #     i = i + 1
 
         embed_all_sequences_in_batch = torch.Tensor(embed_all_sequences_in_batch) #convert from list to tensor
-        embed_all_sequences_in_batch.squeeze_()
+        #embed_all_sequences_in_batch.squeeze_()
         embed_all_sequences_in_batch = embed_all_sequences_in_batch.to(self.device) #radi i bez ovoga pitanje je zasto?
         return embed_all_sequences_in_batch  # TODO: Check if format of this embeddings is aligned with classifier layers
 
