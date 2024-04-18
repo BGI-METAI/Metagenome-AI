@@ -32,7 +32,7 @@ def register_parameters():
     parser.add_argument(
         '--output_home',
         type=str,
-        default='/home/share/huadjyin/home/zhangchao5/code/ProtT5/output_debug',
+        default='/home/share/huadjyin/home/zhangchao5/code/ProtT5/output_accelerate',
     )
     parser.add_argument(
         '--model_path_or_name',
@@ -48,7 +48,7 @@ def register_parameters():
     parser.add_argument('--add_background', type=bool, default=True, help='add background type to the final categories')
 
     parser.add_argument('--epoch', type=int, default=100)
-    parser.add_argument('--learning_rate', type=float, default=1e-6)
+    parser.add_argument('--learning_rate', type=float, default=5e-6)
     parser.add_argument('--loss_weight', type=float, default=1.)
     parser.add_argument('--patience', type=int, default=1)
     parser.add_argument('--k', type=int, default=200, help='Gradient accumulation parameters')
@@ -85,7 +85,7 @@ def worker():
 
     # register dataset
     trainer.register_dataset(
-        data_files=train_files[:2000],
+        data_files=train_files,
         mode='train',
         dataset_type='class',
         batch_size=args.batch_size,
@@ -93,7 +93,7 @@ def worker():
     )
 
     trainer.register_dataset(
-        data_files=test_files[200],
+        data_files=test_files,
         mode='test',
         dataset_type='class',
         batch_size=args.batch_size,
@@ -108,7 +108,12 @@ def worker():
         lora_alpha=32,
         lora_dropout=0.01,
     )
-    trainer.register_model(model=model, reuse=args.reuse, is_trainable=args.is_trainable)
+    trainer.register_model(
+        model=model,
+        reuse=args.reuse,
+        is_trainable=args.is_trainable,
+        learning_rate=args.learning_rate
+    )
 
     trainer.train(**vars(args))
 

@@ -112,13 +112,15 @@ class BaseTrainer(ABC):
                 'max_epoch': self.max_epoch
             },
             init_kwargs={
-                'entity': user_name,
-                'notes': socket.gethostname(),
-                'name': f'ProteinSeqNER_{timestamp}',
-                'group': group,
-                'dir': self.wandb_home,
-                'job_type': 'training',
-                'reinit': True
+                'wandb': {
+                    'entity': user_name,
+                    'notes': socket.gethostname(),
+                    'name': f'ProteinSeqNER_{timestamp}',
+                    'group': group,
+                    'dir': self.wandb_home,
+                    'job_type': 'training',
+                    'reinit': True
+                }
             }
         )
 
