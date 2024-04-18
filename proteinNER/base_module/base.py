@@ -19,14 +19,13 @@ from pathlib import Path
 from datetime import timedelta, datetime
 from typing import Optional, Union
 
-from peft import PeftModel
-from torch.backends import cudnn
+from accelerate import Accelerator
+from accelerate.utils import set_seed
 from torch.optim.lr_scheduler import LRScheduler
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
-from torch.nn.parallel import DistributedDataParallel as DDP
 
-from proteinNER.base_module import CustomNERDataset, SequentialDistributedSampler
+from proteinNER.base_module import CustomNERDataset
 from proteinNER.base_module.dataset import CustomPEFTEmbeddingDataset
 from proteinNER.classifier.model import ProtTransT5ForAAClassifier
 
@@ -39,13 +38,23 @@ class BaseTrainer(ABC):
     valid_loader: DataLoader = field(default=None, metadata={"help": "valid loader"})
     optimizer: Optimizer = field(default=None, metadata={"help": "optimizer for training model"})
     lr_scheduler: LRScheduler = field(default=None, metadata={"help": "Learning rate decay course schedule"})
-    scaler: torch.cuda.amp.GradScaler = field(default=None, metadata={"help": "GradScaler"})
     batch_size: int = field(default=1, metadata={"help": "batch size"})
+    loss_weight: float = field(default=1., metadata={"help": "loss weight"})
+    max_epoch: int = field(default=100, metadata={"help": "max epoch"})
     learning_rate: float = field(default=1e-3, metadata={"help": "learning rate"})
     is_trainable: bool = field(default=True, metadata={"help": "whether the model to be train or not"})
     reuse: bool = field(default=False, metadata={"help": "whether the model parameters to be reuse or not"})
+    accelerator: Accelerator = field(default=None)
 
     def __init__(self, **kwargs):
+
+        set_seed(kwargs.get('seed', 42))
+        self.accelerator = Accelerator(
+            mixed_precision='fp16',
+            log_with='wandb',
+            gradient_accumulation_steps=kwargs.get('k', 1)
+        )
+
         # output home
         output_home = kwargs.get('output_home', '.')
         self.save_in_batch = kwargs.get('save_in_batch', True)
@@ -57,34 +66,13 @@ class BaseTrainer(ABC):
         self.wandb_home = self.register_dir(output_home, 'wandb')
         # result
         self.result_home = self.register_dir(output_home, 'result')
-        # except
-        self.except_home = self.register_dir(output_home, 'except')
-        # register DDP
-        self.local_rank = int(os.environ["LOCAL_RANK"])
-        torch.cuda.set_device(self.local_rank)
-        dist.init_process_group(
-            backend='nccl',
-            timeout=timedelta(minutes=60)
-        )
-        rank = dist.get_rank()
-        self.init_seeds(seed=rank + 1)
 
-    @staticmethod
-    def init_seeds(seed, cuda_deterministic=True):
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        if cuda_deterministic:  # slower, more reproducible
-            cudnn.deterministic = True
-            cudnn.benchmark = False
-        else:  # faster, less reproducible
-            cudnn.deterministic = False
-            cudnn.benchmark = True
-
-    @staticmethod
-    def register_dir(parent_path, folder):
+    def register_dir(self, parent_path, folder):
         new_path = osp.join(parent_path, folder)
-        Path(new_path).mkdir(parents=True, exist_ok=True)
+
+        with self.accelerator.main_process_first():
+            Path(new_path).mkdir(parents=True, exist_ok=True)
+
         return new_path
 
     def register_wandb(
@@ -114,17 +102,27 @@ class BaseTrainer(ABC):
             wandb ouput file save path
         :param timestamp:
         """
-        wandb.init(
-            project=project_name,
-            entity=user_name,
-            notes=socket.gethostname(),
-            name=f'ProteinSeqNER_{timestamp}',
-            group=group,
-            dir=self.wandb_home,
-            job_type='training',
-            reinit=True
+
+        self.accelerator.init_trackers(
+            project_name=project_name,
+            config={
+                'learning_rate': self.learning_rate,
+                'batch_size': self.batch_size,
+                'loss_weight': self.loss_weight,
+                'max_epoch': self.max_epoch
+            },
+            init_kwargs={
+                'wandb': {
+                    'entity': user_name,
+                    'notes': socket.gethostname(),
+                    'name': f'ProteinSeqNER_{timestamp}',
+                    'group': group,
+                    'dir': self.wandb_home,
+                    'job_type': 'training',
+                    'reinit': True
+                }
+            }
         )
-        wandb.watch(self.model, log='all')
 
     def register_dataset(
             self,
@@ -164,28 +162,25 @@ class BaseTrainer(ABC):
             raise ValueError('Got an invalid dataset mode, ONLY SUPPORT: `class` and `embed`')
 
         if mode == 'train':
-            train_sampler = torch.utils.data.distributed.DistributedSampler(dataset)
             self.train_loader = DataLoader(
                 dataset=dataset,
                 batch_size=self.batch_size,
                 collate_fn=dataset.collate_fn,
-                sampler=train_sampler
+                shuffle=True,
             )
         elif mode == 'test':
-            test_sampler = SequentialDistributedSampler(dataset=dataset, batch_size=self.batch_size)
             self.test_loader = DataLoader(
                 dataset=dataset,
                 batch_size=self.batch_size,
                 collate_fn=dataset.collate_fn,
-                sampler=test_sampler
+                shuffle=False,
             )
         elif mode == 'valid':
-            valid_sampler = SequentialDistributedSampler(dataset=dataset, batch_size=self.batch_size)
             self.valid_loader = DataLoader(
                 dataset=dataset,
                 batch_size=self.batch_size,
                 collate_fn=dataset.collate_fn,
-                sampler=valid_sampler
+                shuffle=False,
             )
         else:
             raise ValueError('Got an invalid data loader mode, ONLY SUPPORT: `train`, `test` and `valid`')
@@ -195,34 +190,31 @@ class BaseTrainer(ABC):
         is_trainable = kwargs.get('is_trainable', True)
         self.learning_rate = kwargs.get('learning_rate', 1e-3)
 
-        self.model = model.cuda()
-        self.model = DDP(self.model, device_ids=[self.local_rank], output_device=self.local_rank)
-
+        self.model = model
         if is_trainable:
             self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate)
             self.lr_scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, 1, gamma=0.9)
-            self.scaler = torch.cuda.amp.GradScaler()
 
         if reuse:
             self.load_ckpt(mode='batch', is_trainable=is_trainable)
 
     def save_ckpt(self, mode):
-        if dist.get_rank() == 0:
+        if self.accelerator.main_process_first():
+            unwrapped_model = self.accelerator.unwrap_model(self.model)
             trainer_dict = {
                 "optimizer": self.optimizer.state_dict(),
                 "lr_scheduler": self.lr_scheduler.state_dict(),
-                "scaler": self.scaler.state_dict()
             }
-            classifier_dict = {"state_dict": self.model.module.classifier.state_dict()}
+            classifier_dict = {"state_dict": unwrapped_model.classifier.state_dict()}
 
             if mode == 'batch':
-                torch.save(trainer_dict, osp.join(self.batch_ckpt_home, 'trainer.bin'))
-                torch.save(classifier_dict, osp.join(self.batch_ckpt_home, 'classifier.bin'))
-                self.model.module.embedding.lora_embedding.save_pretrained(self.batch_ckpt_home)
+                self.accelerator.save(trainer_dict, osp.join(self.batch_ckpt_home, 'trainer.bin'))
+                self.accelerator.save(classifier_dict, osp.join(self.batch_ckpt_home, 'classifier.bin'))
+                unwrapped_model.embedding.lora_embedding.save_pretrained(self.batch_ckpt_home)
             elif mode in ['epoch', 'best']:
-                torch.save(trainer_dict, osp.join(self.best_ckpt_home, 'trainer.bin'))
-                torch.save(classifier_dict, osp.join(self.best_ckpt_home, 'classifier.bin'))
-                self.model.module.embedding.lora_embedding.save_pretrained(self.best_ckpt_home)
+                self.accelerator.save(trainer_dict, osp.join(self.best_ckpt_home, 'trainer.bin'))
+                self.accelerator.save(classifier_dict, osp.join(self.best_ckpt_home, 'classifier.bin'))
+                unwrapped_model.embedding.lora_embedding.save_pretrained(self.best_ckpt_home)
             else:
                 raise ValueError('Got an invalid dataset mode, ONLY SUPPORT: `batch`, `epoch` or `best`')
 
@@ -238,18 +230,17 @@ class BaseTrainer(ABC):
             trainer_ckpt = torch.load(osp.join(path, 'trainer.bin'), map_location=torch.device('cuda'))
             self.optimizer.load_state_dict(trainer_ckpt['optimizer'])
             self.lr_scheduler.load_state_dict(trainer_ckpt['lr_scheduler'])
-            self.scaler.load_state_dict(trainer_ckpt['scaler'])
 
         # loading LoRA model
-        self.model.module.embedding.lora_embedding.unload()
-        self.model.module.embedding.lora_embedding.load_adapter(path, is_trainable=is_trainable, adapter_name='aaNER')
+        self.model.embedding.lora_embedding.unload()
+        self.model.embedding.lora_embedding.load_adapter(path, is_trainable=is_trainable, adapter_name='aaNER')
 
         # loading token classifier
         classifier_ckpt = torch.load(osp.join(path, 'classifier.bin'), map_location=torch.device('cuda'))
-        classifier_state_dict = self.model.module.classifier.state_dict()
+        classifier_state_dict = self.model.classifier.state_dict()
         classifier_trained_dict = {k: v for k, v in classifier_ckpt['state_dict'].items() if k in classifier_state_dict}
         classifier_state_dict.update(classifier_trained_dict)
-        self.model.module.classifier.load_state_dict(classifier_state_dict)
+        self.model.classifier.load_state_dict(classifier_state_dict)
 
     @abstractmethod
     def train(self, **kwargs):
