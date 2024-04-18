@@ -4,10 +4,8 @@
 # @Author  : zhangchao
 # @File    : trainer.py
 # @Email   : zhangchao5@genomics.cn
-import wandb
 import torch
 import torch.distributed as dist
-import torch.nn.functional as F
 import numpy as np
 
 from tqdm import tqdm
@@ -23,60 +21,62 @@ class ProteinNERTrainer(BaseTrainer):
         super(ProteinNERTrainer, self).__init__(**kwargs)
 
     def train(self, **kwargs):
-        max_epoch = kwargs.get('epoch', 100)
-        loss_weight = kwargs.get('loss_weight', 1.)
-        patience = kwargs.get('patience', 4)
+        self.loss_weight = kwargs.get('loss_weight', 1.)
         load_best_model = kwargs.get('load_best_model', True)
 
-        wandb_username = kwargs.get('username')
-        wandb_project = kwargs.get('project')
-        wandb_group = kwargs.get('group')
-
-        early_stopper = EarlyStopper(patience=patience)
+        early_stopper = EarlyStopper(patience=kwargs.get('patience', 4))
         self.register_wandb(
-            user_name=wandb_username,
-            project_name=wandb_project,
-            group=wandb_group
+            user_name=kwargs.get('username', 'zhangchao162'),
+            project_name=kwargs.get('project', 'ProtT5'),
+            group=kwargs.get('group', 'training')
         )
-        wandb.config = {
-            "learning_rate": self.learning_rate,
-            "max_epoch": max_epoch,
-            "batch_size": self.batch_size,
-            "loss_weight": loss_weight
-        }
 
-        for eph in range(max_epoch):
+        model, optimizer, train_loader, test_loader, lr_scheduler = self.accelerator.prepare(
+            self.model, self.optimizer, self.train_loader, self.test_loader, self.lr_scheduler
+        )
+
+        for eph in range(kwargs.get('epoch', 100)):
+            model.train()
+            batch_iterator = tqdm(train_loader,
+                                  desc=f'Pid: {self.accelerator.process_index} Eph: {eph:03d} ({early_stopper.counter} / {early_stopper.patience})')
             eph_loss = []
-            self.model.train()
-            self.train_loader.sampler.set_epoch(eph)
-            batch_iterator = tqdm(self.train_loader, desc=f'Eph: {eph:03d}')
             for idx, sample in enumerate(batch_iterator):
                 input_ids, attention_mask, batch_label = sample
-                input_ids, attention_mask, batch_label = input_ids.cuda(), attention_mask.cuda(), batch_label.cuda()
-                with torch.cuda.amp.autocast():
-                    logist = self.model(input_ids, attention_mask)
-                    loss = ProteinLoss.focal_loss(
-                        pred=logist.permute(0, 2, 1),
-                        target=batch_label,
-                        weight=loss_weight,
-                        gamma=2.
-                    )
+                with self.accelerator.accumulate(model):
+                    logist = model(input_ids, attention_mask)
+                    with self.accelerator.autocast():
+                        loss = ProteinLoss.focal_loss(
+                            pred=logist.permute(0, 2, 1),
+                            target=batch_label,
+                            weight=self.loss_weight,
+                            gamma=2.
+                        )
+
+                    self.accelerator.backward(loss)
+                    optimizer.step()
+                    optimizer.zero_grad()
 
                 batch_iterator.set_postfix({'Loss': f'{loss.item():.4f}'})
+                self.accelerator.log({'loss': loss.item()})
                 eph_loss.append(loss.item())
-                wandb.log({'loss': loss.item()})
-
-                self.optimizer.zero_grad()
-                self.scaler.scale(loss).backward()
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-                if self.save_in_batch and idx % 10 == 0:
+                if self.save_in_batch and idx % 500 == 0:
                     self.save_ckpt('batch')
-            self.lr_scheduler.step()
-            self.valid_model_performance()
+
+                with self.accelerator.main_process_first():
+                    self.accelerator.log({'learning rate': optimizer.state_dict()['param_groups'][0]['lr']})
+            lr_scheduler.step()
+
+            # self.valid_model_performance(test_loader)
             if early_stopper(np.mean(eph_loss)):
-                print(f"{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')} Model Training Finished!")
-                print(f'The best `ckpt` file has saved in {self.best_ckpt_home}')
+                self.accelerator.print(
+                    f"Pid: {self.accelerator.process_index}: {datetime.now().strftime('%d_%m_%Y_%H_%M_%S')} Model Training Finished!")
+                with self.accelerator.main_process_first():
+                    self.accelerator.print(
+                        f'Pid: {self.accelerator.process_index}: The best `ckpt` file has saved in {self.best_ckpt_home}')
+                self.accelerator.end_training()
+                if np.isnan(np.mean(eph_loss)):
+                    self.accelerator.print(
+                        f"{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')} Model training ended unexpectedly!")
                 if load_best_model:
                     self.load_ckpt(mode='best', is_trainable=False)
                 break
@@ -91,11 +91,11 @@ class ProteinNERTrainer(BaseTrainer):
         return concat
 
     @torch.no_grad()
-    def valid_model_performance(self):
+    def valid_model_performance(self, test_loader):
         self.model.eval()
         accuracy = []
         precision = []
-        for sample in self.test_loader:
+        for sample in test_loader:
             input_ids, attention_mask, batch_label = sample
             input_ids, attention_mask, batch_label = input_ids.cuda(), attention_mask.cuda(), batch_label.cuda()
             logist = self.model(input_ids, attention_mask)
@@ -110,8 +110,8 @@ class ProteinNERTrainer(BaseTrainer):
         accuracy = self.distributed_concat(torch.cat(accuracy, dim=0))
         precision = self.distributed_concat(torch.cat(precision, dim=0))
 
-        wandb.log({'Accuracy (Token Level)': np.mean(accuracy.item())})
-        wandb.log({'Precision (Entity Level)': np.mean(precision)})
+        self.accelerator.log({'Accuracy (Token Level)': accuracy.mean().item()})
+        self.accelerator.log({'Precision (Entity Level)': np.mean(precision)})
 
     @staticmethod
     def accuracy_token_level(predict, label):

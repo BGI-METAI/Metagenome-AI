@@ -20,24 +20,24 @@ def register_parameters():
     parser.add_argument(
         '--train_data_path',
         type=str,
-        default='/home/share/huadjyin/home/zhangchao5/dataset/gene3d/gene3d.train/cat1.txt',
+        default='/home/share/huadjyin/home/zhangchao5/dataset/gene3d/gene3d.train/chunk500w/chunk1.txt',
         help='the path of input dataset'
     )
     parser.add_argument(
         '--test_data_path',
         type=str,
-        default='/home/share/huadjyin/home/zhangchao5/dataset/gene3d/gene3d.test.txt',
+        default='/home/share/huadjyin/home/zhangchao5/dataset/gene3d/gene3d.test/chunk00.txt',
         help='the path of input dataset'
     )
     parser.add_argument(
         '--output_home',
         type=str,
-        default='/home/share/huadjyin/home/zhangchao5/code/ProtT5/output',
+        default='/home/share/huadjyin/home/zhangchao5/code/ProtT5/output_debug',
     )
     parser.add_argument(
         '--model_path_or_name',
         type=str,
-        default='/home/share/huadjyin/home/s_cenweixuan/weight/prot_t5_xl_half_uniref50-enc',
+        default='/home/share/huadjyin/home/zhangchao5/weight/prot_t5_xl_half_uniref50-enc',
         help='pretrianed pLM model path or name'
     )
 
@@ -50,7 +50,8 @@ def register_parameters():
     parser.add_argument('--epoch', type=int, default=100)
     parser.add_argument('--learning_rate', type=float, default=1e-6)
     parser.add_argument('--loss_weight', type=float, default=1.)
-    parser.add_argument('--patience', type=int, default=4)
+    parser.add_argument('--patience', type=int, default=1)
+    parser.add_argument('--k', type=int, default=200, help='Gradient accumulation parameters')
     parser.add_argument('--load_best_model', type=bool, default=True)
     parser.add_argument('--reuse', type=bool, default=False)
     parser.add_argument('--is_trainable', type=bool, default=True, help='Whether the LoRA adapter should be trainable or not.')
@@ -63,7 +64,7 @@ def register_parameters():
 
 
 def worker():
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
     args = register_parameters()
 
     # prepare dataset
@@ -80,11 +81,11 @@ def worker():
             test_files.extend(line.strip().split(' '))
 
     # initialize trainer class
-    trainer = ProteinNERTrainer(output_home=args.output_home)
+    trainer = ProteinNERTrainer(output_home=args.output_home, k=args.k)
 
     # register dataset
     trainer.register_dataset(
-        data_files=train_files,
+        data_files=train_files[:2000],
         mode='train',
         dataset_type='class',
         batch_size=args.batch_size,
@@ -92,7 +93,7 @@ def worker():
     )
 
     trainer.register_dataset(
-        data_files=test_files,
+        data_files=test_files[200],
         mode='test',
         dataset_type='class',
         batch_size=args.batch_size,
