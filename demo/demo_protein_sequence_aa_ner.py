@@ -26,7 +26,7 @@ def register_parameters():
     parser.add_argument(
         '--test_data_path',
         type=str,
-        default='/home/share/huadjyin/home/zhangchao5/dataset/gene3d/gene3d.test/chunk00.txt',
+        default='/home/share/huadjyin/home/zhangchao5/dataset/gene3d/gene3d.test/chunk00.00.txt',
         help='the path of input dataset'
     )
     parser.add_argument(
@@ -45,21 +45,23 @@ def register_parameters():
         default='/home/share/huadjyin/home/zhangchao5/weight/prot_t5_xl_half_uniref50-enc',
         help='pretrianed pLM model path or name'
     )
-    parser.add_argument('--inference_length_threshold', type=int, default=5, help='inference domain length threshold')  # 50
+    parser.add_argument('--inference_length_threshold', type=int, default=5,
+                        help='inference domain length threshold')  # 50
     parser.add_argument('--seed', type=int, default=42, help='random seed')
     parser.add_argument('--batch_size', type=int, default=3, help='batch size')
     parser.add_argument('--num_classes', type=int, default=6595,
                         help='the number of categories')  # PFAM: 20794, GENE3D: 6595
     parser.add_argument('--add_background', type=bool, default=True, help='add background type to the final categories')
 
-    parser.add_argument('--epoch', type=int, default=1) # 100
+    parser.add_argument('--epoch', type=int, default=10)  # 100
     parser.add_argument('--learning_rate', type=float, default=1e-6)
     parser.add_argument('--loss_weight', type=float, default=1.)
     parser.add_argument('--patience', type=int, default=1)
     parser.add_argument('--k', type=int, default=200, help='Gradient accumulation parameters')
     parser.add_argument('--load_best_model', type=bool, default=True)
     parser.add_argument('--reuse', type=bool, default=False)
-    parser.add_argument('--is_trainable', type=bool, default=True, help='Whether the LoRA adapter should be trainable or not.')
+    parser.add_argument('--is_trainable', type=bool, default=True,
+                        help='Whether the LoRA adapter should be trainable or not.')
 
     parser.add_argument('--user_name', type=str, default='kxzhang2000', help='wandb register parameter')
     parser.add_argument('--project', type=str, default='Pro_func', help='wandb project name')
@@ -69,34 +71,29 @@ def register_parameters():
 
 
 def worker():
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1,3"
     args = register_parameters()
 
     # prepare dataset
     train_files = []
     with open(args.train_data_path, 'r') as file:
         for line in file.readlines():
-            if len(train_files) < 10:
-                train_files.extend(line.strip().split(' '))
-            else:
-                break
+            train_files.extend(line.strip().split(' '))
     random.seed(args.seed)
     random.shuffle(train_files)
 
     test_files = []
     with open(args.test_data_path, 'r') as file:
         for line in file.readlines():
-            if len(test_files) < 10:
-                test_files.extend(line.strip().split(' '))
-            else:
-                break
+            test_files.extend(line.strip().split(' '))
+
 
     # initialize trainer class
     trainer = ProteinNERTrainer(output_home=args.output_home, k=args.k)
 
     # register dataset
     trainer.register_dataset(
-        data_files=train_files,
+        data_files=train_files[:10],
         mode='train',
         dataset_type='class',
         batch_size=args.batch_size,
@@ -104,7 +101,7 @@ def worker():
     )
 
     trainer.register_dataset(
-        data_files=test_files,
+        data_files=test_files[:10],
         mode='test',
         dataset_type='class',
         batch_size=args.batch_size,
@@ -128,7 +125,6 @@ def worker():
 
     trainer.train(**vars(args))
     trainer.inference(**vars(args))
-
 
 
 if __name__ == '__main__':

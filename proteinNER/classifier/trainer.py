@@ -35,7 +35,7 @@ class ProteinNERTrainer(BaseTrainer):
             self.model, self.optimizer, self.train_loader, self.test_loader, self.lr_scheduler
         )
 
-        for eph in range(kwargs.get('epoch', 1)):  # 100
+        for eph in range(kwargs.get('epoch', 10)):  # 100
             self.model.train()
             batch_iterator = tqdm(self.train_loader,
                                   desc=f'Pid: {self.accelerator.process_index} Eph: {eph:03d} ({early_stopper.counter} / {early_stopper.patience})')
@@ -105,7 +105,7 @@ class ProteinNERTrainer(BaseTrainer):
         precision = self.accelerator.gather(torch.cat(precision, dim=0))
 
         self.accelerator.log({'Accuracy (Token Level)': accuracy.mean().item()})
-        self.accelerator.log({'Precision (Entity Level)': np.mean(precision)})
+        self.accelerator.log({'Precision (Entity Level)': precision.mean().item()})
 
     @staticmethod
     def accuracy_token_level(predict, label):
