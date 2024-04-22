@@ -26,7 +26,6 @@ import torch
 import torch.nn as nn
 from torch.utils import data
 from torch.optim.lr_scheduler import StepLR, LinearLR
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import wandb
 
@@ -38,6 +37,7 @@ from torch.distributed import init_process_group, destroy_process_group
 import torch.distributed as dist
 
 from embedding import EsmEmbedding
+from embedding_protein_trans import ProteinTransEmbedding
 from dataset import CustomDataset
 from config import get_config, get_weights_file_path
 
@@ -181,6 +181,8 @@ def choose_llm(config):
     """
     if config["emb_type"] == "ESM":
         return EsmEmbedding()
+    if config["emb_type"] == "PTRANS":
+        return ProteinTransEmbedding()
     else:
         raise NotImplementedError("This type of embedding is not supported")
 
@@ -313,7 +315,7 @@ def train_classifier(rank, config, world_size):
             for batch in batch_iterator:
                 optimizer.zero_grad()
 
-                embedding = llm.get_embedding(batch, pooling="mean")
+                embedding = llm.get_embedding(batch)
                 classifier_output = classifier(embedding)
 
                 target = batch[config["target"]].to(rank)
@@ -464,6 +466,6 @@ if __name__ == "__main__":
     warnings.filterwarnings("ignore")
     config = get_config()
     # world_size = torch.cuda.device_count()
-    world_size = 2
+    world_size = 1
     mp.spawn(train_classifier, args=(config, world_size), nprocs=world_size)
     # train_model(config)
