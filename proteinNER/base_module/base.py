@@ -19,7 +19,7 @@ from pathlib import Path
 from datetime import timedelta, datetime
 from typing import Optional, Union
 
-from accelerate import Accelerator
+from accelerate import Accelerator, InitProcessGroupKwargs
 from accelerate.utils import set_seed
 from torch.optim.lr_scheduler import LRScheduler
 from torch.optim.optimizer import Optimizer
@@ -49,10 +49,14 @@ class BaseTrainer(ABC):
     def __init__(self, **kwargs):
 
         set_seed(kwargs.get('seed', 42))
+        process_group_kwargs = InitProcessGroupKwargs(
+            timeout=timedelta(seconds=5400)
+        )  # 1.5 hours
         self.accelerator = Accelerator(
             mixed_precision='fp16',
             log_with='wandb',
-            gradient_accumulation_steps=kwargs.get('k', 1)
+            gradient_accumulation_steps=kwargs.get('k', 1),
+            kwargs_handlers=[process_group_kwargs]
         )
 
         # output home
