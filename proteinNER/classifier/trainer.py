@@ -64,7 +64,8 @@ class ProteinNERTrainer(BaseTrainer):
                     self.accelerator.log({'learning rate': self.optimizer.state_dict()['param_groups'][0]['lr']})
             self.lr_scheduler.step()
 
-            self.valid_model_performance(test_loader=self.test_loader)
+            # if eph % 5 == 0:
+            #     self.valid_model_performance(test_loader=self.test_loader)
 
             if early_stopper(np.mean(eph_loss)):
                 if np.isnan(np.mean(eph_loss)):
@@ -88,7 +89,8 @@ class ProteinNERTrainer(BaseTrainer):
         self.model.eval()
         accuracy = []
         precision = []
-        for sample in test_loader:
+        batch_iterator = tqdm(test_loader, desc=f'Pid: {self.accelerator.process_index}')
+        for idx, sample in enumerate(batch_iterator):
             input_ids, attention_mask, batch_label = sample
             logist = self.model(input_ids, attention_mask)
             pred = torch.nn.functional.softmax(logist, dim=-1).argmax(-1)
@@ -111,11 +113,11 @@ class ProteinNERTrainer(BaseTrainer):
 
     def precision_entity_level(self, predict, label):
         correct_dict = {i: torch.zeros(1).to(self.accelerator.device) for i in
-                        range(1, self.model.module.classifier.out_features)}
+                        range(1, self.model.classifier.out_features)}
         predict_dict = {i: torch.zeros(1).to(self.accelerator.device) for i in
-                        range(1, self.model.module.classifier.out_features)}
+                        range(1, self.model.classifier.out_features)}
         label_dict = {i: torch.zeros(1).to(self.accelerator.device) for i in
-                      range(1, self.model.module.classifier.out_features)}
+                      range(1, self.model.classifier.out_features)}
 
         predict = predict.flatten()
         label = label.flatten()
