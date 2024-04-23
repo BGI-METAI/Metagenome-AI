@@ -60,6 +60,7 @@ def register_parameters():
     parser.add_argument('--k', type=int, default=500, help='Gradient accumulation parameters')
     parser.add_argument('--reuse', action='store_true')
     parser.add_argument('--is_trainable', action='store_true', help='Whether the LoRA adapter should be trainable or not.')
+    parser.add_argument('--mode', type=str, default="best", help='Whether the LoRA adapter should be trainable or not.')
 
     parser.add_argument('--user_name', type=str, default='zhangchao162', help='wandb register parameter')
     parser.add_argument('--project', type=str, default='proteinNERPEFT', help='wandb project name')

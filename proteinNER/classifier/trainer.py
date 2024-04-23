@@ -26,7 +26,7 @@ class ProteinNERTrainer(BaseTrainer):
 
         early_stopper = EarlyStopper(patience=kwargs.get('patience', 4))
         self.register_wandb(
-            user_name=kwargs.get('username', 'kxzhang2000'),
+            user_name=kwargs.get('user_name', 'kxzhang2000'),
             project_name=kwargs.get('project', 'Pro_func'),
             group=kwargs.get('group', 'NER_V2')
         )
