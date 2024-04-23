@@ -30,9 +30,14 @@ def register_parameters():
         help='the path of input dataset'
     )
     parser.add_argument(
+        '--label_dict_path',
+        type=str,
+        default='/home/share/huadjyin/home/zhangchao5/dataset/GENE3D_id2label.pkl',
+    )
+    parser.add_argument(
         '--output_home',
         type=str,
-        default='/home/share/huadjyin/home/zhangchao5/code/ProtT5/output_accelerate',
+        default='/home/share/huadjyin/home/zhangkexin2/model/output',
     )
     parser.add_argument(
         '--model_path_or_name',
@@ -40,7 +45,8 @@ def register_parameters():
         default='/home/share/huadjyin/home/zhangchao5/weight/prot_t5_xl_half_uniref50-enc',
         help='pretrianed pLM model path or name'
     )
-
+    parser.add_argument('--inference_length_threshold', type=int, default=50,
+                        help='inference domain length threshold')  # 50
     parser.add_argument('--seed', type=int, default=42, help='random seed')
     parser.add_argument('--batch_size', type=int, default=3, help='batch size')
     parser.add_argument('--num_classes', type=int, default=6595,
@@ -111,10 +117,12 @@ def worker():
         model=model,
         reuse=args.reuse,
         is_trainable=args.is_trainable,
-        learning_rate=args.learning_rate
+        learning_rate=args.learning_rate,
+        mode=args.mode
     )
 
     trainer.train(**vars(args))
+    trainer.inference(**vars(args))
 
 
 if __name__ == '__main__':

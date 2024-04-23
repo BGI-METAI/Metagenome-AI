@@ -189,6 +189,7 @@ class BaseTrainer(ABC):
         reuse = kwargs.get('reuse', False)
         is_trainable = kwargs.get('is_trainable', True)
         self.learning_rate = kwargs.get('learning_rate', 1e-3)
+        mode = kwargs.get('mode', 'best')
 
         self.model = model
         if is_trainable:
@@ -196,7 +197,7 @@ class BaseTrainer(ABC):
             self.lr_scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, 1, gamma=0.9)
 
         if reuse:
-            self.load_ckpt(mode='batch', is_trainable=is_trainable)
+            self.load_ckpt(mode=mode, is_trainable=is_trainable)
 
     def save_ckpt(self, mode):
         if self.accelerator.main_process_first():
