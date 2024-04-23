@@ -53,7 +53,7 @@ def register_parameters():
     parser.add_argument('--patience', type=int, default=1)
     parser.add_argument('--k', type=int, default=500, help='Gradient accumulation parameters')
     parser.add_argument('--load_best_model', type=bool, default=True)
-    parser.add_argument('--reuse', type=bool, default=False)
+    parser.add_argument('--reuse', type=bool, default=True)
     parser.add_argument('--is_trainable', type=bool, default=True, help='Whether the LoRA adapter should be trainable or not.')
 
     parser.add_argument('--user_name', type=str, default='zhangchao162', help='wandb register parameter')

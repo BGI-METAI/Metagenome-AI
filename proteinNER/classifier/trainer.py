@@ -64,9 +64,6 @@ class ProteinNERTrainer(BaseTrainer):
                     self.accelerator.log({'learning rate': self.optimizer.state_dict()['param_groups'][0]['lr']})
             self.lr_scheduler.step()
 
-            # if eph % 5 == 0:
-            #     self.valid_model_performance(test_loader=self.test_loader)
-
             if early_stopper(np.mean(eph_loss)):
                 if np.isnan(np.mean(eph_loss)):
                     self.accelerator.print(
@@ -105,7 +102,7 @@ class ProteinNERTrainer(BaseTrainer):
         precision = self.accelerator.gather(torch.cat(precision, dim=0))
 
         self.accelerator.log({'Accuracy (Token Level)': accuracy.mean().item()})
-        self.accelerator.log({'Precision (Entity Level)': np.mean(precision)})
+        self.accelerator.log({'Precision (Entity Level)': precision.mean().item()})
 
     @staticmethod
     def accuracy_token_level(predict, label):

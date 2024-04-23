@@ -4,14 +4,9 @@
 # @Author  : zhangchao
 # @File    : base.py
 # @Email   : zhangchao5@genomics.cn
-import os
 import os.path as osp
 import socket
-import random
-import numpy as np
-import wandb
 import torch
-import torch.distributed as dist
 
 from abc import ABC, abstractmethod
 from dataclasses import field
@@ -237,7 +232,7 @@ class BaseTrainer(ABC):
 
         # loading LoRA model
         self.model.embedding.lora_embedding.unload()
-        self.model.embedding.lora_embedding.load_adapter(path, is_trainable=is_trainable, adapter_name='aaNER')
+        self.model.embedding.lora_embedding.load_adapter(path, is_trainable=is_trainable, adapter_name='default')
 
         # loading token classifier
         classifier_ckpt = torch.load(osp.join(path, 'classifier.bin'), map_location=torch.device('cuda'))
