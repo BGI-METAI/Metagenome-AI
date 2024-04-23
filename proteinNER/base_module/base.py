@@ -19,6 +19,7 @@ from accelerate.utils import set_seed
 from torch.optim.lr_scheduler import LRScheduler
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
+from safetensors import safe_open
 
 from proteinNER.base_module import CustomNERDataset
 from proteinNER.base_module.dataset import CustomPEFTEmbeddingDataset
@@ -231,8 +232,19 @@ class BaseTrainer(ABC):
             self.lr_scheduler.load_state_dict(trainer_ckpt['lr_scheduler'])
 
         # loading LoRA model
-        self.model.embedding.lora_embedding.unload()
-        self.model.embedding.lora_embedding.load_adapter(path, is_trainable=is_trainable, adapter_name='default')
+        lora_weight_tensor = {}
+        with safe_open(osp.join(path, 'adapter_model.safetensors'), framework='pt') as file:
+            for key in file.keys():
+                lora_weight_tensor[key.replace('weight', 'default.weight')] = file.get_tensor(key)
+
+        for name, weight in self.model.embedding.lora_embedding.named_parameters():
+            if name not in lora_weight_tensor.keys():
+                continue
+            if weight.requires_grad:
+                assert weight.data.size() == lora_weight_tensor[name].size(), f'Got an invalid key: `{name}`!'
+                weight.data.copy_(lora_weight_tensor[name])
+                if not is_trainable:
+                    weight.requires_grad = False
 
         # loading token classifier
         classifier_ckpt = torch.load(osp.join(path, 'classifier.bin'), map_location=torch.device('cuda'))
