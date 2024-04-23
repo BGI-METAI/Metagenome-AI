@@ -182,7 +182,7 @@ def choose_llm(config):
     if config["emb_type"] == "ESM":
         return EsmEmbedding()
     if config["emb_type"] == "PTRANS":
-        return ProteinTransEmbedding()
+        return ProteinTransEmbedding(model_name=config["prot_trans_model_name"])
     else:
         raise NotImplementedError("This type of embedding is not supported")
 
@@ -285,7 +285,7 @@ def train_classifier(rank, config, world_size):
             logger = init_logger(timestamp)
             init_wandb(config["model_folder"], classifier, timestamp)
 
-        # To wait for wandb to get initialized
+        # # To wait for wandb to get initialized
         dist.barrier()
 
         optimizer = torch.optim.Adam(classifier.parameters(), lr=config["lr"], eps=1e-9)

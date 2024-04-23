@@ -1,5 +1,6 @@
 import gc
 import re
+import logging
 
 import numpy as np
 import torch
@@ -9,21 +10,25 @@ from embedding import Embedding
 
 # Adapted from https://github.com/tymor22/protein-vec/blob/main/src_run/gh_encode_and_search_new_proteins.ipynb
 
-
 class ProteinTransEmbedding(Embedding):
-    def __init__(self):
+    def __init__(self, model_name='prot_t5_xl_uniref50'):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model_name = model_name
 
         #Load the ProtTrans model and ProtTrans tokenizer
         # https://huggingface.co/Rostlab
-        self.tokenizer = T5Tokenizer.from_pretrained("Rostlab/prot_t5_xl_uniref50", do_lower_case=False )
-        self.model = T5EncoderModel.from_pretrained("Rostlab/prot_t5_xl_uniref50")
+        # Available models in Rostlab:
+        # prot_bert, ProstT5, ProstT5_fp16,prot_t5_xl_uniref50, prot_t5_xl_half_uniref50-enc,
+        # prot_t5_base_mt_uniref50, prot_t5_base_mt_uniref50, prot_bert_bfd_ss3, prot_bert_bfd_membrane,
+        # prot_bert_bfd_localization, prot_t5_xxl_uniref50
+        self.tokenizer = T5Tokenizer.from_pretrained(f"Rostlab/{model_name}", do_lower_case=False )
+        self.model = T5EncoderModel.from_pretrained(f"Rostlab/{model_name}")
         gc.collect()
 
         self.model.to(self.device)
         self.model.eval()
 
-        print('Number of parameters in ProTrans model: ', sum(p.numel() for p in  self.model.parameters()))
+        logging.info(f'Number of parameters in {model_name} model: ', sum(p.numel() for p in  self.model.parameters()))
 
     def get_embedding(self, batch):
         
