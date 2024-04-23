@@ -45,16 +45,15 @@ def register_parameters():
     parser.add_argument('--batch_size', type=int, default=3, help='batch size')
     parser.add_argument('--num_classes', type=int, default=6595,
                         help='the number of categories')  # PFAM: 20794, GENE3D: 6595
-    parser.add_argument('--add_background', type=bool, default=True, help='add background type to the final categories')
+    parser.add_argument('--add_background', action='store_true', help='add background type to the final categories')
 
     parser.add_argument('--epoch', type=int, default=100)
     parser.add_argument('--learning_rate', type=float, default=5e-5)
     parser.add_argument('--loss_weight', type=float, default=1.)
     parser.add_argument('--patience', type=int, default=1)
     parser.add_argument('--k', type=int, default=500, help='Gradient accumulation parameters')
-    parser.add_argument('--load_best_model', type=bool, default=True)
-    parser.add_argument('--reuse', type=bool, default=True)
-    parser.add_argument('--is_trainable', type=bool, default=True, help='Whether the LoRA adapter should be trainable or not.')
+    parser.add_argument('--reuse', action='store_true')
+    parser.add_argument('--is_trainable', action='store_true', help='Whether the LoRA adapter should be trainable or not.')
 
     parser.add_argument('--user_name', type=str, default='zhangchao162', help='wandb register parameter')
     parser.add_argument('--project', type=str, default='proteinNERPEFT', help='wandb project name')
