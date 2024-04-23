@@ -4,14 +4,9 @@
 # @Author  : zhangchao
 # @File    : base.py
 # @Email   : zhangchao5@genomics.cn
-import os
 import os.path as osp
 import socket
-import random
-import numpy as np
-import wandb
 import torch
-import torch.distributed as dist
 
 from abc import ABC, abstractmethod
 from dataclasses import field
@@ -19,11 +14,12 @@ from pathlib import Path
 from datetime import timedelta, datetime
 from typing import Optional, Union
 
-from accelerate import Accelerator
+from accelerate import Accelerator, InitProcessGroupKwargs
 from accelerate.utils import set_seed
 from torch.optim.lr_scheduler import LRScheduler
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
+from safetensors import safe_open
 
 from proteinNER.base_module import CustomNERDataset
 from proteinNER.base_module.dataset import CustomPEFTEmbeddingDataset
@@ -49,10 +45,14 @@ class BaseTrainer(ABC):
     def __init__(self, **kwargs):
 
         set_seed(kwargs.get('seed', 42))
+        process_group_kwargs = InitProcessGroupKwargs(
+            timeout=timedelta(seconds=5400)
+        )  # 1.5 hours
         self.accelerator = Accelerator(
             mixed_precision='fp16',
             log_with='wandb',
-            gradient_accumulation_steps=kwargs.get('k', 1)
+            gradient_accumulation_steps=kwargs.get('k', 1),
+            kwargs_handlers=[process_group_kwargs]
         )
 
         # output home
@@ -189,6 +189,7 @@ class BaseTrainer(ABC):
         reuse = kwargs.get('reuse', False)
         is_trainable = kwargs.get('is_trainable', True)
         self.learning_rate = kwargs.get('learning_rate', 1e-3)
+        mode = kwargs.get('mode', 'best')
 
         self.model = model
         if is_trainable:
@@ -196,7 +197,7 @@ class BaseTrainer(ABC):
             self.lr_scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, 1, gamma=0.9)
 
         if reuse:
-            self.load_ckpt(mode='batch', is_trainable=is_trainable)
+            self.load_ckpt(mode=mode, is_trainable=is_trainable)
 
     def save_ckpt(self, mode):
         if self.accelerator.main_process_first():
@@ -232,8 +233,19 @@ class BaseTrainer(ABC):
             self.lr_scheduler.load_state_dict(trainer_ckpt['lr_scheduler'])
 
         # loading LoRA model
-        self.model.embedding.lora_embedding.unload()
-        self.model.embedding.lora_embedding.load_adapter(path, is_trainable=is_trainable, adapter_name='aaNER')
+        lora_weight_tensor = {}
+        with safe_open(osp.join(path, 'adapter_model.safetensors'), framework='pt') as file:
+            for key in file.keys():
+                lora_weight_tensor[key.replace('weight', 'default.weight')] = file.get_tensor(key)
+
+        for name, weight in self.model.embedding.lora_embedding.named_parameters():
+            if name not in lora_weight_tensor.keys():
+                continue
+            if weight.requires_grad:
+                assert weight.data.size() == lora_weight_tensor[name].size(), f'Got an invalid key: `{name}`!'
+                weight.data.copy_(lora_weight_tensor[name])
+                if not is_trainable:
+                    weight.requires_grad = False
 
         # loading token classifier
         classifier_ckpt = torch.load(osp.join(path, 'classifier.bin'), map_location=torch.device('cuda'))

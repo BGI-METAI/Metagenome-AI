@@ -35,7 +35,7 @@ class ProteinNERTrainer(BaseTrainer):
             self.model, self.optimizer, self.train_loader, self.test_loader, self.lr_scheduler
         )
 
-        for eph in range(kwargs.get('epoch', 10)):  # 100
+        for eph in range(kwargs.get('epoch', 100)):
             self.model.train()
             batch_iterator = tqdm(self.train_loader,
                                   desc=f'Pid: {self.accelerator.process_index} Eph: {eph:03d} ({early_stopper.counter} / {early_stopper.patience})')
@@ -66,8 +66,6 @@ class ProteinNERTrainer(BaseTrainer):
                     self.accelerator.log({'learning rate': self.optimizer.state_dict()['param_groups'][0]['lr']})
             self.lr_scheduler.step()
 
-            self.valid_model_performance(test_loader=self.test_loader)
-
             if early_stopper(np.mean(eph_loss)):
                 if np.isnan(np.mean(eph_loss)):
                     self.accelerator.print(
@@ -90,7 +88,8 @@ class ProteinNERTrainer(BaseTrainer):
         self.model.eval()
         accuracy = []
         precision = []
-        for sample in test_loader:
+        batch_iterator = tqdm(test_loader, desc=f'Pid: {self.accelerator.process_index}')
+        for idx, sample in enumerate(batch_iterator):
             input_ids, attention_mask, batch_label = sample
             logist = self.model(input_ids, attention_mask)
             pred = torch.nn.functional.softmax(logist, dim=-1).argmax(-1)
@@ -113,11 +112,11 @@ class ProteinNERTrainer(BaseTrainer):
 
     def precision_entity_level(self, predict, label):
         correct_dict = {i: torch.zeros(1).to(self.accelerator.device) for i in
-                        range(1, self.model.module.classifier.out_features)}
+                        range(1, self.model.classifier.out_features)}
         predict_dict = {i: torch.zeros(1).to(self.accelerator.device) for i in
-                        range(1, self.model.module.classifier.out_features)}
+                        range(1, self.model.classifier.out_features)}
         label_dict = {i: torch.zeros(1).to(self.accelerator.device) for i in
-                      range(1, self.model.module.classifier.out_features)}
+                      range(1, self.model.classifier.out_features)}
 
         predict = predict.flatten()
         label = label.flatten()
@@ -185,14 +184,16 @@ class ProteinNERTrainer(BaseTrainer):
         length_threshold = kwargs.get('inference_length_threshold', 50)
 
         self.load_ckpt(mode='best')
+        self.model, self.test_loader = self.accelerator.prepare(self.model, self.test_loader)
         self.model.eval()
 
         file_name = 0
-        for sample in self.test_loader:
+        batch_iterator = tqdm(self.test_loader, desc=f'Pid: {self.accelerator.process_index}')
+        for idx, sample in enumerate(batch_iterator):
             t1 = time.time()
             file_name += 1
             input_ids, attention_mask, batch_label = sample
-            logist = self.model(input_ids.cuda(), attention_mask.cuda())
+            logist = self.model(input_ids, attention_mask)
             pred = torch.nn.functional.softmax(logist, dim=-1).argmax(-1)
 
             index_list = torch.nonzero(pred != 0, as_tuple=False)
@@ -236,13 +237,13 @@ class ProteinNERTrainer(BaseTrainer):
                     else:
                         batch_location_list.append(location_list) if len(location_list) != 0 else None
                         batch_label_name_list.append(label_name_list) if len(label_name_list) != 0 else None
-                with open(output_home + '/inference_protein_location_label_batch' + str(file_name) + '.txt', 'w') as f:
+                with open(output_home + '/result/inference_protein_location_label_batch' + str(file_name) + '.txt', 'w') as f:
                     f.write('Sequence' + '\t' + 'Location([start, end])' + '\t' + 'Predicted_label' + '\n')
                     for j in range(len(batch_label_name_list)):
                         f.write(
                             'ABC...' + '\t' + str(batch_location_list[j]) + '\t' + str(batch_label_name_list[j]) + '\n')
             t2 = time.time()
-            print("ench batch time", round(t2 - t1, 5), 'seconds')
+            print("each batch time", round(t2 - t1, 5), 'seconds')
 
     @staticmethod
     def convert_label(label_dict_path, label_id):
