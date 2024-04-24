@@ -29,7 +29,7 @@ from torch.optim.lr_scheduler import StepLR, LinearLR
 from tqdm import tqdm
 import wandb
 
-# # Enable Multi-GPU training
+# Enable Multi-GPU training
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.multiprocessing as mp
 from torch.utils.data.distributed import DistributedSampler
@@ -56,7 +56,6 @@ def init_wandb(model_folder, model, timestamp):
     Path(wandb_output_dir).mkdir(parents=True, exist_ok=True)
     wandb.init(
         project="protein function annotation",
-        entity="nikolamilicevic",
         notes=socket.gethostname(),
         name=f'prot_func_anno_{timestamp}',
         group='linear_classifier',
@@ -285,7 +284,7 @@ def train_classifier(rank, config, world_size):
             logger = init_logger(timestamp)
             init_wandb(config["model_folder"], classifier, timestamp)
 
-        # # To wait for wandb to get initialized
+        # To wait for wandb to get initialized
         dist.barrier()
 
         optimizer = torch.optim.Adam(classifier.parameters(), lr=config["lr"], eps=1e-9)
