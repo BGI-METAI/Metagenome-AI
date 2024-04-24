@@ -6,15 +6,16 @@ from transformers import T5EncoderModel, T5Tokenizer
 
 from protein_vec import trans_basic_block, trans_basic_block_Config
 from protein_vec import featurize_prottrans, embed_vec
-from embedding import Embedding
+from embedding_protein_trans import ProteinTransEmbedding
 
 # Adapted from https://github.com/tymor22/protein-vec/blob/main/src_run/gh_encode_and_search_new_proteins.ipynb
 
 
-class ProteinVecEmbedding(Embedding):
-    def __init__(self):
+class ProteinVecEmbedding(ProteinTransEmbedding):
+    def __init__(self, ptrans_model_name='prot_t5_xl_uniref50'):
+        super().__init__(ptrans_model_name)
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         #Protein-Vec MOE model checkpoint and config
         # wget https://users.flatironinstitute.org/thamamsy/public_www/protein_vec_models.gz
         # # Unzip this directory of models with the following command:
@@ -22,14 +23,6 @@ class ProteinVecEmbedding(Embedding):
         # Or download from /goofys/projects/MAI/protein_vec/
         vec_model_cpnt = 'Metagenome-AI/data/protein_vec/protein_vec.ckpt'  # ~800MB
         vec_model_config = 'Metagenome-AI/data/protein_vec/protein_vec_params.json'
-
-        #Load the ProtTrans model and ProtTrans tokenizer
-        self.tokenizer = T5Tokenizer.from_pretrained("Rostlab/prot_t5_xl_uniref50", do_lower_case=False )
-        self.model = T5EncoderModel.from_pretrained("Rostlab/prot_t5_xl_uniref50")
-        gc.collect()
-
-        self.model.to(self.device)
-        self.model.eval()
 
         #Load the model
         vec_model_config = trans_basic_block_Config.from_json(vec_model_config)
@@ -57,7 +50,7 @@ class ProteinVecEmbedding(Embedding):
         #Pull out sequences for the new proteins
         flat_seqs = batch["sequence"] 
 
-        protrans_sequence = featurize_prottrans(flat_seqs, self.model, self.tokenizer, self.device) #firt make embading using ProTrans pretrained model
+        protrans_sequence = super().featurize_prottrans(flat_seqs, self.model, self.tokenizer, self.device) #first make embading using ProTrans pretrained model
         embed_all_sequences_in_batch = embed_vec(protrans_sequence, self.model_deep, masks, self.device) #than use protrens embedings to get embedings from protein-vec model  
         print(embed_all_sequences_in_batch.shape)
 
@@ -81,4 +74,4 @@ class ProteinVecEmbedding(Embedding):
 
     def to(self, device):
         self.model_deep.to(device)
-        self.model.to(device)
+        super().to(device)
