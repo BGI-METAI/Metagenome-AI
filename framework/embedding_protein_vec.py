@@ -36,23 +36,21 @@ class ProteinVecEmbedding(ProteinTransEmbedding):
         #self.batch_converter = self.tokenizer.get_batch_converter()  # TODO: Check if tokenizer has this method!
 
     def get_embedding(self, batch):
-        #data = [(fam, seq) for fam, seq in zip(batch["family"], batch["sequence"])]
-        #_, _, batch_tokens = self.batch_converter(data)
-
         # This is a forward pass of the Protein-Vec model
         # Every aspect is turned on (therefore no masks)
         #sampled_keys = np.array(['TM', 'PFAM', 'GENE3D', 'ENZYME', 'MFO', 'BPO', 'CCO'])
         sampled_keys = np.array(['PFAM'])  #have to define the annotation that is in usage
         all_cols = np.array(['TM', 'PFAM', 'GENE3D', 'ENZYME', 'MFO', 'BPO', 'CCO'])
         masks = [all_cols[k] in sampled_keys for k in range(len(all_cols))]
+        masks = np.tile(masks, (len(batch["sequence"]), 1)) # the size of the mask must be batch_size x 7 (number od aspect models)
         masks = torch.logical_not(torch.tensor(masks, dtype=torch.bool))[None,:]
+        masks.squeeze_(0)
         
         #Pull out sequences for the new proteins
         flat_seqs = batch["sequence"] 
 
         protrans_sequence = super().featurize_prottrans(flat_seqs, self.model, self.tokenizer, self.device) #first make embading using ProTrans pretrained model
         embed_all_sequences_in_batch = embed_vec(protrans_sequence, self.model_deep, masks, self.device) #than use protrens embedings to get embedings from protein-vec model  
-        print(embed_all_sequences_in_batch.shape)
 
         # # Loop through the sequences and embed them using protein-vec
         # i = 0
@@ -64,9 +62,8 @@ class ProteinVecEmbedding(ProteinTransEmbedding):
         #     i = i + 1
 
         embed_all_sequences_in_batch = torch.Tensor(embed_all_sequences_in_batch) #convert from list to tensor
-        #embed_all_sequences_in_batch.squeeze_()
         embed_all_sequences_in_batch = embed_all_sequences_in_batch.to(self.device) #radi i bez ovoga pitanje je zasto?
-        return embed_all_sequences_in_batch  # TODO: Check if format of this embeddings is aligned with classifier layers
+        return embed_all_sequences_in_batch
 
 
     def get_embedding_dim(self):
