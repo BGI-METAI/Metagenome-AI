@@ -41,6 +41,8 @@ def featurize_prottrans(sequences, model, tokenizer, device):
     with torch.no_grad():
         embedding = model(input_ids=input_ids, attention_mask=attention_mask)
 
+    # may should cut the aditional token from the data
+
     embedding = embedding.last_hidden_state.cpu().numpy()
     prottrans_embedding = torch.tensor(embedding)
     prottrans_embedding = prottrans_embedding.to(device) # padding adds one more caracter (insted od 512 it is 513)
