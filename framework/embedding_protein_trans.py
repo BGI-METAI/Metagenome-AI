@@ -56,7 +56,13 @@ class ProteinTransEmbedding(Embedding):
             embedding = model(input_ids=input_ids, attention_mask=attention_mask)
 
         embedding = embedding.last_hidden_state.cpu().numpy()
-        prottrans_embedding = torch.tensor(embedding)
+        features = []
+        for seq_num in range(len(embedding)):  # TODO: Consider removing this if it is too slow!
+            seq_len = (attention_mask[seq_num] == 1).sum()
+            seq_emd = embedding[seq_num][:seq_len-1]
+            features.append(seq_emd)
+
+        prottrans_embedding = torch.tensor(features)
         prottrans_embedding = prottrans_embedding.to(device) # padding adds one more caracter (insted od 512 it is 513)
         
         return(prottrans_embedding)
