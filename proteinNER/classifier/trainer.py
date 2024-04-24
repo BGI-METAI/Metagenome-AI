@@ -203,7 +203,7 @@ class ProteinNERTrainer(BaseTrainer):
                 diff_indices = torch.nonzero(nonzero_label[1:] != nonzero_label[:-1]).squeeze()
                 diff_indices = torch.cat([diff_indices, torch.tensor([len(nonzero_label) - 1]).cuda()])
 
-                diff_mask = index_list[:, 1][1:] - index_list[:, 1][:-1]  # 蛋白质分割（看gap的大小和负值情况）
+                diff_mask = index_list[:, 1][1:] - index_list[:, 1][:-1]
                 single_indices = torch.nonzero(diff_mask < 0, as_tuple=True)[0]
                 diff_indices = torch.cat((diff_indices, single_indices)).unique().sort()[0]
                 diff_indices = torch.cat([torch.tensor([0]).cuda(), diff_indices])

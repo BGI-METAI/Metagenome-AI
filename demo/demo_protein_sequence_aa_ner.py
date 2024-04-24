@@ -7,7 +7,6 @@
 import argparse
 import sys
 import random
-import os
 
 sys.path.insert(0, "..")
 
@@ -122,7 +121,7 @@ def worker():
     )
 
     trainer.train(**vars(args))
-    trainer.inference(**vars(args))
+    # trainer.inference(**vars(args))
 
 
 if __name__ == '__main__':
