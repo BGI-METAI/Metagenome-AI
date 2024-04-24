@@ -58,10 +58,6 @@ class ProteinVecEmbedding(Embedding):
         flat_seqs = batch["sequence"] 
 
         protrans_sequence = featurize_prottrans(flat_seqs, self.model, self.tokenizer, self.device) #firt make embading using ProTrans pretrained model
-
-        # if you want to derive a single representation (per-protein embedding) for the whole protein
-        protrans_embedings = protrans_sequence.mean(dim=2) # shape (1024)
-
         embed_all_sequences_in_batch = embed_vec(protrans_sequence, self.model_deep, masks, self.device) #than use protrens embedings to get embedings from protein-vec model  
         print(embed_all_sequences_in_batch.shape)
 
