@@ -23,7 +23,6 @@ class ProteinTransEmbedding(Embedding):
         # prot_bert_bfd_localization, prot_t5_xxl_uniref50
         self.tokenizer = T5Tokenizer.from_pretrained(f"Rostlab/{model_name}", do_lower_case=False )
         self.model = T5EncoderModel.from_pretrained(f"Rostlab/{model_name}")
-        gc.collect()
 
         self.model.to(self.device)
         self.model.eval()
