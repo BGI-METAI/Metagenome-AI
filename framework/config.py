@@ -34,6 +34,7 @@ def get_config():
         # prot_bert, ProstT5, ProstT5_fp16,prot_t5_xl_uniref50, prot_t5_xl_half_uniref50-enc,
         # prot_t5_base_mt_uniref50, prot_t5_base_mt_uniref50, prot_bert_bfd_ss3, prot_bert_bfd_membrane,
         # prot_bert_bfd_localization, prot_t5_xxl_uniref50
+        "pvec_models": "TM,PFAM,GENE3D,ENZYME,MFO,BPO,CCO"
     }
 
 
