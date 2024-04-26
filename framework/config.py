@@ -14,22 +14,24 @@ from pathlib import Path
 
 def get_config():
     return {
-        "train":
-        "/home/share/huadjyin/home/nikolamilicevic/pfam_subs/pfam.train.subs.csv",
-        "valid":
-        "/home/share/huadjyin/home/nikolamilicevic/pfam_subs/pfam.valid.subs.csv",
-        "test": "/home/share/huadjyin/home/nikolamilicevic/pfam_subs/pfam.test.subs.csv",
-        "batch_size": 64,
+        "train": "~/MAI/Metagenome-AI/data/pfam_tiny.train.csv",
+        "valid": "~/MAI/Metagenome-AI/data/pfam_tiny.valid.csv",
+        "test": "~/MAI/Metagenome-AI/data/pfam_tiny.test.csv",
+        "batch_size": 128,
         "num_epochs": 20,
         "lr": 1e-3,
-        "emb_type": "ESM",
+        "emb_type": "PTRANS",
         "label": "label",
         "max_seq_len": 700 * 2,
         "sequence": "seq",
         "target": "family",
         "model_folder": "weights",
-        "model_basename": "esm_model_",
+        "model_basename": "prot_model_",
         "preload": None,
+        "prot_trans_model_name": "prot_t5_xl_uniref50",  
+        # prot_bert, ProstT5, ProstT5_fp16,prot_t5_xl_uniref50, prot_t5_xl_half_uniref50-enc,
+        # prot_t5_base_mt_uniref50, prot_t5_base_mt_uniref50, prot_bert_bfd_ss3, prot_bert_bfd_membrane,
+        # prot_bert_bfd_localization, prot_t5_xxl_uniref50
     }
 
 
