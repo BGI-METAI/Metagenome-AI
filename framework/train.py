@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # -*-coding:utf-8 -*-
-'''
+"""
 @File    :   train.py
 @Time    :   2024/03/06 19:55:37
 @Author  :   Nikola Milicevic 
 @Version :   1.0
 @Contact :   nikolamilicevic@genomics.cn
 @Desc    :   None
-'''
+"""
 
 import datetime
 import logging
@@ -36,10 +36,10 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.distributed import init_process_group, destroy_process_group
 import torch.distributed as dist
 
-from embedding import EsmEmbedding
+from embedding_esm import EsmEmbedding
 from embedding_protein_trans import ProteinTransEmbedding
 from dataset import CustomDataset
-from config import get_config, get_weights_file_path
+from config import get_weights_file_path, ConfigProviderFactory
 
 
 def init_logger(timestamp):
@@ -50,20 +50,21 @@ def init_logger(timestamp):
     )
     return logging.getLogger(__name__)
 
+
 def init_wandb(model_folder, model, timestamp):
     # initialize wandb tracker
-    wandb_output_dir = os.path.join(model_folder, 'wandb_home')
+    wandb_output_dir = os.path.join(model_folder, "wandb_home")
     Path(wandb_output_dir).mkdir(parents=True, exist_ok=True)
     wandb.init(
         project="protein function annotation",
         notes=socket.gethostname(),
-        name=f'prot_func_anno_{timestamp}',
-        group='linear_classifier',
+        name=f"prot_func_anno_{timestamp}",
+        group="linear_classifier",
         dir=wandb_output_dir,
-        job_type='training',
-        reinit=True
+        job_type="training",
+        reinit=True,
     )
-    wandb.watch(model, log='all')
+    wandb.watch(model, log="all")
 
 
 # Initialize the PyTorch distributed backend
@@ -76,6 +77,7 @@ def ddp_setup(rank, world_size):
         rank: Unique identifier of each process
         world_size: Total number of processes
     """
+    # IP address that runs rank=0 process
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "12356"
     init_process_group(backend="nccl", rank=rank, world_size=world_size)
@@ -141,7 +143,9 @@ def get_datasets(config):
         val_ds_raw = datasets.Dataset(pa.Table.from_pandas(val_ds_raw))
 
         test_ds_raw = pd.read_csv(config["test"])
-        test_ds_raw["le_" + config["label"]] = le.transform(test_ds_raw[config["label"]])
+        test_ds_raw["le_" + config["label"]] = le.transform(
+            test_ds_raw[config["label"]]
+        )
         test_ds_raw = datasets.Dataset(pa.Table.from_pandas(test_ds_raw))
     else:
         # 80% training 10% validation 10% test split
@@ -239,10 +243,12 @@ def train_classifier(rank, config, world_size):
         train_dataloader, val_ds, test_ds, le = get_datasets(config)
 
         if rank == 0:
-            val_dataloader = data.DataLoader(val_ds,
-                    batch_size=config["batch_size"], shuffle=False)
-            test_dataloader = data.DataLoader(test_ds,
-            batch_size=config["batch_size"], shuffle=False)
+            val_dataloader = data.DataLoader(
+                val_ds, batch_size=config["batch_size"], shuffle=False
+            )
+            test_dataloader = data.DataLoader(
+                test_ds, batch_size=config["batch_size"], shuffle=False
+            )
         else:
             val_dataloader = None
             test_dataloader = None
@@ -299,11 +305,15 @@ def train_classifier(rank, config, world_size):
             if stop_flag.item() == 1:
                 # All GPUs got signal from rank 0 to end training
                 if rank == 0:
-                    logger.warning(f"Early stopping in epoch {epoch}. Training finished...")
+                    logger.warning(
+                        f"Early stopping in epoch {epoch}. Training finished..."
+                    )
                 break
 
             train_dataloader.sampler.set_epoch(epoch)
-            batch_iterator = tqdm(train_dataloader, desc=f"Processing epoch on rank {rank}: {epoch:02d}")
+            batch_iterator = tqdm(
+                train_dataloader, desc=f"Processing epoch on rank {rank}: {epoch:02d}"
+            )
 
             # mem_used = torch.cuda.max_memory_allocated() / (1024**3)
             # logging.info(f"GPU_{rank} used max mem in epoch {epoch}: {mem_used:.2f} GB")
@@ -317,7 +327,7 @@ def train_classifier(rank, config, world_size):
                 embedding = llm.get_embedding(batch)
                 classifier_output = classifier(embedding)
 
-                target = batch[config["target"]].to(rank)
+                target = batch["target"].to(rank)
 
                 loss = loss_fn(
                     classifier_output,
@@ -346,7 +356,9 @@ def train_classifier(rank, config, world_size):
             # Gather loss from each process
             # There will be world_size number of losses that
             # will be averaged and plotted as a final loss of certain epoch
-            train_loss_gather = [torch.zeros_like(train_loss) for _ in range(world_size)]
+            train_loss_gather = [
+                torch.zeros_like(train_loss) for _ in range(world_size)
+            ]
             if rank == 0:
                 dist.gather(train_loss, gather_list=train_loss_gather)
             else:
@@ -369,7 +381,7 @@ def train_classifier(rank, config, world_size):
                         embedding = llm.get_embedding(batch)
 
                         classifier_output = classifier(embedding)
-                        target = batch[config["target"]].to(rank)
+                        target = batch["target"].to(rank)
 
                         loss = loss_fn(
                             classifier_output,
@@ -392,7 +404,6 @@ def train_classifier(rank, config, world_size):
                 wandb.log({"val_loss": val_loss})
                 wandb.log({"accuracy": acc})
                 wandb.log({"f1_score": f1})
-
 
                 logger.warning(
                     f"Accuracy: {acc:.2f} F1: {f1:.2f} Validation loss: {val_loss:.2f} Training loss: {train_loss:.2f}"
@@ -431,7 +442,7 @@ def train_classifier(rank, config, world_size):
                     embedding = llm.get_embedding(batch)
 
                     classifier_output = classifier(embedding)
-                    target = batch[config["target"]].to(rank)
+                    target = batch["target"].to(rank)
                     pred = le.inverse_transform(
                         torch.argmax(classifier_output, dim=1).cpu()
                     )
@@ -463,8 +474,7 @@ def train_classifier(rank, config, world_size):
 
 if __name__ == "__main__":
     warnings.filterwarnings("ignore")
-    config = get_config()
-    # world_size = torch.cuda.device_count()
-    world_size = 1
+    config = ConfigProviderFactory.get_config_provider("ESM")
+    world_size = torch.cuda.device_count()
+    # world_size = 2
     mp.spawn(train_classifier, args=(config, world_size), nprocs=world_size)
-    # train_model(config)
