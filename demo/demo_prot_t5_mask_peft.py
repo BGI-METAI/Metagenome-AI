@@ -14,13 +14,13 @@ def register_parameters():
     parser.add_argument(
         '--train_data_path',
         type=str,
-        default='/home/share/huadjyin/home/s_sukui/02_data/05_meta/gene3d/gene3d.train/chunk1.txt',
+        default='/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/train.txt',
         help='the path of input dataset'
     )
     parser.add_argument(
         '--test_data_path',
         type=str,
-        default='/home/share/huadjyin/home/s_sukui/02_data/05_meta/gene3d/gene3d.test/chunk00.00.txt',
+        default='/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/test.txt',
         help='the path of input dataset'
     )
     parser.add_argument(
