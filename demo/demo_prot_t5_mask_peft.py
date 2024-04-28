@@ -5,8 +5,8 @@ import os
 
 sys.path.insert(0, "..")
 
-from proteinNER.classifier.model import ProtTransT5ForAAClassifier, ProtTransT5MaskPEFTModel
-from proteinNER.classifier.trainer import ProteinNERTrainer, ProteinMaskTrainer
+from proteinNER.classifier.model import ProtTransT5MaskPEFTModel
+from proteinNER.classifier.trainer import ProteinMaskTrainer
 
 
 def register_parameters():
@@ -14,13 +14,13 @@ def register_parameters():
     parser.add_argument(
         '--train_data_path',
         type=str,
-        default='/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/train.txt',
+        default='/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/03_datasets/train.txt',
         help='the path of input dataset'
     )
     parser.add_argument(
         '--test_data_path',
         type=str,
-        default='/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/test.txt',
+        default='/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/03_datasets/test.txt',
         help='the path of input dataset'
     )
     parser.add_argument(
@@ -42,9 +42,9 @@ def register_parameters():
     parser.add_argument('--inference_length_threshold', type=int, default=50,
                         help='inference domain length threshold')  # 50
     parser.add_argument('--seed', type=int, default=42, help='random seed')
-    parser.add_argument('--batch_size', type=int, default=3, help='batch size')
-    parser.add_argument('--num_classes', type=int, default=6595,
-                        help='the number of vocab size, including: ALG...')  # PFAM: 20794, GENE3D: 6595
+    parser.add_argument('--batch_size', type=int, default=2, help='batch size')
+    parser.add_argument('--num_classes', type=int, default=28,
+                        help='the number of categories')  # PFAM: 20794, GENE3D: 6595
     parser.add_argument('--add_background', action='store_true', help='add background type to the final categories')
 
     parser.add_argument('--epoch', type=int, default=100)
@@ -53,7 +53,8 @@ def register_parameters():
     parser.add_argument('--patience', type=int, default=1)
     parser.add_argument('--k', type=int, default=500, help='Gradient accumulation parameters')
     parser.add_argument('--reuse', action='store_true')
-    parser.add_argument('--is_trainable', action='store_true', help='Whether the LoRA adapter should be trainable or not.')
+    parser.add_argument('--is_trainable', action='store_true',
+                        help='Whether the LoRA adapter should be trainable or not.')
     parser.add_argument('--mode', type=str, default="best", help='Whether the LoRA adapter should be trainable or not.')
 
     parser.add_argument('--user_name', type=str, default='sukui', help='wandb register parameter')
@@ -64,7 +65,7 @@ def register_parameters():
 
 
 def worker():
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
     os.environ["WANDB_MODE"] = "offline"
     args = register_parameters()
 

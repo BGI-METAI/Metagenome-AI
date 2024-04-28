@@ -9,9 +9,9 @@ class TestDataProcess(unittest.TestCase):
     def test_split_train_test(self):
         # split train and test data set
         data_path = "/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/02_pkls"
-        save_path = "/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/"
+        save_path = "/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/03_datasets"
         train_rate = 0.7
-        write_num = 100
+        write_num = 1000
 
         assert os.path.exists(data_path), f"{data_path} is not exits"
 

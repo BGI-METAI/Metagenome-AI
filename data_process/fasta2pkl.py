@@ -3,8 +3,6 @@ import argparse
 import os
 import os.path as osp
 import pickle
-from multiprocessing import Pool
-from functools import partial
 
 from tqdm import tqdm
 
@@ -71,5 +69,5 @@ def main():
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
+    # logging.basicConfig(level=logging.DEBUG)
     main()

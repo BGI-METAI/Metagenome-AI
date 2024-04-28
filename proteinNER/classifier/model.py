@@ -67,15 +67,14 @@ class ProtTransT5MaskPEFTModel(nn.Module):
             lora_dropout=0.1,
     ):
         super(ProtTransT5MaskPEFTModel, self).__init__()
-        self.base_model = T5Model.from_pretrained(model_name_or_path)
-        peft_config = LoraConfig(
-            inference_mode=lora_inference_mode,
-            r=lora_r,
+        self.embedding = ProtTransT5EmbeddingPEFTModel(
+            model_name_or_path=model_name_or_path,
+            lora_inference_mode=lora_inference_mode,
+            lora_r=lora_r,
             lora_alpha=lora_alpha,
             lora_dropout=lora_dropout
         )
-        self.lora_embedding = get_peft_model(self.base_model, peft_config)
-        self.classifier = nn.Linear(self.lora_embedding.config.d_model, num_classes)
+        self.classifier = nn.Linear(self.embedding.lora_embedding.config.d_model, num_classes)
 
     def forward(self, input_ids, attention_mask):
-        return self.classifier(self.lora_embedding(input_ids, attention_mask))
+        return self.classifier(self.embedding(input_ids, attention_mask))
