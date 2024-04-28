@@ -24,7 +24,7 @@ class ProtT5EmbeddingIncrementalTrainer(BaseTrainer):
         loss_weight = kwargs.get('loss_weight', 1.)
         patience = kwargs.get('patience', 4)
         load_best_model = kwargs.get('load_best_model', True)
-        wandb_username = kwargs.get('username')
+        wandb_username = kwargs.get('user_name')
         wandb_project = kwargs.get('project')
         wandb_group = kwargs.get('group')
 

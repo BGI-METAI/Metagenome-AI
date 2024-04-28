@@ -35,7 +35,7 @@ def process_line(line, save_path):
         if value.strip():
             values.append(value.strip())
     protein_id, seq, partial, gc_count = values[0], values[-1], values[5], values[9]
-    # remove "*"
+    # remove "*" in ORF
     seq = seq[:-1]
     logging.debug(f"protein_id:{protein_id}, seq:{seq}, partial:{partial}, gc_count:{gc_count}")
     with open(osp.join(save_path, f'{protein_id}.pkl'), 'wb') as file:
