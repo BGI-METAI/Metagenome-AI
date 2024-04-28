@@ -22,7 +22,7 @@ from torch.utils.data import DataLoader
 from safetensors import safe_open
 
 from proteinNER.base_module import CustomNERDataset
-from proteinNER.base_module.dataset import CustomPEFTEmbeddingDataset
+from proteinNER.base_module.dataset import CustomPEFTEmbeddingDataset, CustomMaskDataset
 from proteinNER.classifier.model import ProtTransT5ForAAClassifier
 
 
@@ -154,6 +154,13 @@ class BaseTrainer(ABC):
         elif dataset_type == 'embed':
             dataset = CustomPEFTEmbeddingDataset(
                 incremental_protein_sequence_path=data_files,
+                tokenizer_model_name_or_path=model_name_or_path,
+                legacy=legacy,
+                do_lower_case=do_lower_case
+            )
+        elif dataset_type == 'mask':
+            dataset = CustomMaskDataset(
+                processed_sequence_label_pairs_path=data_files,
                 tokenizer_model_name_or_path=model_name_or_path,
                 legacy=legacy,
                 do_lower_case=do_lower_case

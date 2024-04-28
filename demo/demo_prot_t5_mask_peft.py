@@ -6,7 +6,7 @@ import os
 sys.path.insert(0, "..")
 
 from proteinNER.classifier.model import ProtTransT5ForAAClassifier, ProtTransT5MaskPEFTModel
-from proteinNER.classifier.trainer import ProteinNERTrainer
+from proteinNER.classifier.trainer import ProteinNERTrainer, ProteinMaskTrainer
 
 
 def register_parameters():
@@ -44,7 +44,7 @@ def register_parameters():
     parser.add_argument('--seed', type=int, default=42, help='random seed')
     parser.add_argument('--batch_size', type=int, default=3, help='batch size')
     parser.add_argument('--num_classes', type=int, default=6595,
-                        help='the number of categories')  # PFAM: 20794, GENE3D: 6595
+                        help='the number of vocab size, including: ALG...')  # PFAM: 20794, GENE3D: 6595
     parser.add_argument('--add_background', action='store_true', help='add background type to the final categories')
 
     parser.add_argument('--epoch', type=int, default=100)
@@ -64,7 +64,7 @@ def register_parameters():
 
 
 def worker():
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     os.environ["WANDB_MODE"] = "offline"
     args = register_parameters()
 
@@ -82,13 +82,13 @@ def worker():
             test_files.extend(line.strip().split(' '))
 
     # initialize trainer class
-    trainer = ProteinNERTrainer(output_home=args.output_home, k=args.k)
+    trainer = ProteinMaskTrainer(output_home=args.output_home, k=args.k)
 
     # register dataset
     trainer.register_dataset(
         data_files=train_files,
         mode='train',
-        dataset_type='class',
+        dataset_type='mask',
         batch_size=args.batch_size,
         model_name_or_path=args.model_path_or_name
     )
@@ -96,7 +96,7 @@ def worker():
     trainer.register_dataset(
         data_files=test_files,
         mode='test',
-        dataset_type='class',
+        dataset_type='mask',
         batch_size=args.batch_size,
         model_name_or_path=args.model_path_or_name
     )

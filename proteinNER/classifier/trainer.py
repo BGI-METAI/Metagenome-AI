@@ -237,7 +237,8 @@ class ProteinNERTrainer(BaseTrainer):
                     else:
                         batch_location_list.append(location_list) if len(location_list) != 0 else None
                         batch_label_name_list.append(label_name_list) if len(label_name_list) != 0 else None
-                with open(output_home + '/result/inference_protein_location_label_batch' + str(file_name) + '.txt', 'w') as f:
+                with open(output_home + '/result/inference_protein_location_label_batch' + str(file_name) + '.txt',
+                          'w') as f:
                     f.write('Sequence' + '\t' + 'Location([start, end])' + '\t' + 'Predicted_label' + '\n')
                     for j in range(len(batch_label_name_list)):
                         f.write(
@@ -251,3 +252,65 @@ class ProteinNERTrainer(BaseTrainer):
             label_dict = pickle.load(f)
         label_name = label_dict[label_id.item()]
         return label_name
+
+
+class ProteinMaskTrainer(ProteinNERTrainer):
+    def train(self, **kwargs):
+        self.loss_weight = kwargs.get('loss_weight', 1.)
+
+        early_stopper = EarlyStopper(patience=kwargs.get('patience', 4))
+        # self.register_wandb(
+        #     user_name=kwargs.get('user_name', 'kxzhang2000'),
+        #     project_name=kwargs.get('project', 'Pro_func'),
+        #     group=kwargs.get('group', 'NER_V2')
+        # )
+
+        self.model, self.optimizer, self.train_loader, self.test_loader, self.lr_scheduler = self.accelerator.prepare(
+            self.model, self.optimizer, self.train_loader, self.test_loader, self.lr_scheduler
+        )
+
+        for eph in range(kwargs.get('epoch', 100)):
+            self.model.train()
+            batch_iterator = tqdm(self.train_loader,
+                                  desc=f'Pid: {self.accelerator.process_index} Eph: {eph:03d} ({early_stopper.counter} / {early_stopper.patience})')
+            eph_loss = []
+            for idx, sample in enumerate(batch_iterator):
+                input_ids, attention_mask, batch_label = sample
+                with self.accelerator.accumulate(self.model):
+                    logist = self.model(input_ids, attention_mask)
+                    with self.accelerator.autocast():
+                        loss = ProteinLoss.cross_entropy_loss(
+                            pred=logist.permute(0, 2, 1),
+                            target=batch_label,
+                        )
+
+                    self.accelerator.backward(loss)
+                    self.optimizer.step()
+                    self.optimizer.zero_grad()
+
+                batch_iterator.set_postfix({'Loss': f'{loss.item():.4f}'})
+                self.accelerator.log({'loss': loss.item()})
+                eph_loss.append(loss.item())
+                if self.save_in_batch and idx % 500 == 0:
+                    self.save_ckpt('batch')
+
+                with self.accelerator.main_process_first():
+                    self.accelerator.log({'learning rate': self.optimizer.state_dict()['param_groups'][0]['lr']})
+            self.lr_scheduler.step()
+
+            if early_stopper(np.mean(eph_loss)):
+                if np.isnan(np.mean(eph_loss)):
+                    self.accelerator.print(
+                        f"\n{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')} Model training ended unexpectedly!")
+
+                self.accelerator.print(
+                    f"\nPid: {self.accelerator.process_index}: {datetime.now().strftime('%d_%m_%Y_%H_%M_%S')} Model Training Finished!")
+
+                self.accelerator.wait_for_everyone()
+                with self.accelerator.main_process_first():
+                    self.accelerator.print(
+                        f'\n\nPid: {self.accelerator.process_index}: The best `ckpt` file has saved in {self.best_ckpt_home}')
+                self.accelerator.end_training()
+                break
+            elif early_stopper.counter == 0:
+                self.save_ckpt(mode='best')
