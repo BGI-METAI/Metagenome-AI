@@ -291,7 +291,7 @@ class ProteinMaskTrainer(ProteinNERTrainer):
                 batch_iterator.set_postfix({'Loss': f'{loss.item():.4f}'})
                 self.accelerator.log({'loss': loss.item()})
                 eph_loss.append(loss.item())
-                if self.save_in_batch and idx % 500 == 0 and idx != 0:
+                if self.save_in_batch and idx % 500 == 0:
                     self.save_ckpt('batch')
 
                 with self.accelerator.main_process_first():

@@ -67,7 +67,7 @@ def register_parameters():
 
 def worker():
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-    os.environ["WANDB_MODE"] = "offline"
+    # os.environ["WANDB_MODE"] = "offline"
     args = register_parameters()
 
     # prepare dataset
@@ -103,15 +103,10 @@ def worker():
         model_name_or_path=args.model_path_or_name
     )
 
-    model = ProtTransT5MaskPEFTModel(
+    model = ProtTransT5MaskPretrainModel(
         model_name_or_path=args.model_path_or_name,
         num_classes=args.num_classes + 1 if args.add_background else args.num_classes,
-        lora_inference_mode=False,
-        lora_r=8,
-        lora_alpha=32,
-        lora_dropout=0.01,
     )
-
     trainer.register_model(
         model=model,
         reuse=args.reuse,
