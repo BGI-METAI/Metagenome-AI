@@ -277,14 +277,7 @@ class ProteinMaskTrainer(ProteinNERTrainer):
             for idx, sample in enumerate(batch_iterator):
                 input_ids, attention_mask, batch_label = sample
                 with self.accelerator.accumulate(self.model):
-                    try:
-                        logist = self.model(input_ids, attention_mask)
-                    except RuntimeError as exception:
-                        print('WARNING: out of memory, will pass this')
-                        if "out of memory" in str(exception):
-                            torch.cuda.empty_cache()
-                        else:
-                            raise exception
+                    logist = self.model(input_ids, attention_mask)
                     with self.accelerator.autocast():
                         loss = ProteinLoss.cross_entropy_loss(
                             pred=logist.permute(0, 2, 1),
@@ -298,7 +291,7 @@ class ProteinMaskTrainer(ProteinNERTrainer):
                 batch_iterator.set_postfix({'Loss': f'{loss.item():.4f}'})
                 self.accelerator.log({'loss': loss.item()})
                 eph_loss.append(loss.item())
-                if self.save_in_batch and idx % 500 == 0:
+                if self.save_in_batch and idx % 500 == 0 and idx != 0:
                     self.save_ckpt('batch')
 
                 with self.accelerator.main_process_first():

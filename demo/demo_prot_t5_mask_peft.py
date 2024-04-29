@@ -5,7 +5,7 @@ import os
 
 sys.path.insert(0, "..")
 
-from proteinNER.classifier.model import ProtTransT5MaskPEFTModel
+from proteinNER.classifier.model import ProtTransT5MaskPEFTModel, ProtTransT5MaskPretrainModel
 from proteinNER.classifier.trainer import ProteinMaskTrainer
 
 
@@ -52,6 +52,7 @@ def register_parameters():
     parser.add_argument('--loss_weight', type=float, default=1.)
     parser.add_argument('--patience', type=int, default=1)
     parser.add_argument('--k', type=int, default=500, help='Gradient accumulation parameters')
+    parser.add_argument('--max_token', type=int, default=512, help='max sequence')
     parser.add_argument('--reuse', action='store_true')
     parser.add_argument('--is_trainable', action='store_true',
                         help='Whether the LoRA adapter should be trainable or not.')
@@ -66,21 +67,21 @@ def register_parameters():
 
 def worker():
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-    # os.environ["WANDB_MODE"] = "offline"
+    os.environ["WANDB_MODE"] = "offline"
     args = register_parameters()
 
     # prepare dataset
     train_files = []
     with open(args.train_data_path, 'r') as file:
         for line in file.readlines():
-            train_files.extend(line.strip().split(' '))
+            train_files.extend([line.strip() for line in line.strip().split(' ') if line.endswith("pkl")])
     random.seed(args.seed)
     random.shuffle(train_files)
 
     test_files = []
     with open(args.test_data_path, 'r') as file:
         for line in file.readlines():
-            test_files.extend(line.strip().split(' '))
+            test_files.extend([line.strip() for line in line.strip().split(' ') if line.endswith("pkl")])
 
     # initialize trainer class
     trainer = ProteinMaskTrainer(output_home=args.output_home, k=args.k)
@@ -102,13 +103,18 @@ def worker():
         model_name_or_path=args.model_path_or_name
     )
 
-    model = ProtTransT5MaskPEFTModel(
+    # model = ProtTransT5MaskPEFTModel(
+    #     model_name_or_path=args.model_path_or_name,
+    #     num_classes=args.num_classes + 1 if args.add_background else args.num_classes,
+    #     lora_inference_mode=False,
+    #     lora_r=8,
+    #     lora_alpha=32,
+    #     lora_dropout=0.01,
+    # )
+
+    model = ProtTransT5MaskPretrainModel(
         model_name_or_path=args.model_path_or_name,
         num_classes=args.num_classes + 1 if args.add_background else args.num_classes,
-        lora_inference_mode=False,
-        lora_r=8,
-        lora_alpha=32,
-        lora_dropout=0.01,
     )
     trainer.register_model(
         model=model,

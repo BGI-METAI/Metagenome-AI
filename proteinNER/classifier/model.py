@@ -78,3 +78,27 @@ class ProtTransT5MaskPEFTModel(nn.Module):
 
     def forward(self, input_ids, attention_mask):
         return self.classifier(self.embedding(input_ids, attention_mask))
+
+
+class ProTransEmbeddingModel(nn.Module):
+    def __init__(self, lora_embedding, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lora_embedding = lora_embedding
+
+    def forward(self, input_ids, attention_mask):
+        return self.lora_embedding(input_ids, attention_mask).last_hidden_state
+
+
+class ProtTransT5MaskPretrainModel(nn.Module):
+    def __init__(
+            self,
+            model_name_or_path,
+            num_classes,
+    ):
+        super(ProtTransT5MaskPretrainModel, self).__init__()
+        self.base_model = T5EncoderModel.from_pretrained(model_name_or_path)
+        self.embedding = ProTransEmbeddingModel(lora_embedding=self.base_model)
+        self.classifier = nn.Linear(self.embedding.lora_embedding.config.d_model, num_classes)
+
+    def forward(self, input_ids, attention_mask):
+        return self.classifier(self.embedding(input_ids, attention_mask))

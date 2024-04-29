@@ -149,10 +149,10 @@ class CustomMaskDataset(Dataset):
             self,
             processed_sequence_label_pairs_path: List[str],
             tokenizer_model_name_or_path: str,
-            max_token: int = 1024,
+            max_token: int = 512,
             **kwargs
     ):
-        self.max_token = max_token
+        self.max_token = max(max_token - 1, 0)
         self.pairs_path = processed_sequence_label_pairs_path
         self.tokenizer = T5Tokenizer.from_pretrained(tokenizer_model_name_or_path, **kwargs)
         # add mask token in tokenizer, vocab_size = 28 + 1
