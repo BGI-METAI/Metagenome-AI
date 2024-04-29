@@ -259,11 +259,11 @@ class ProteinMaskTrainer(ProteinNERTrainer):
         self.loss_weight = kwargs.get('loss_weight', 1.)
 
         early_stopper = EarlyStopper(patience=kwargs.get('patience', 4))
-        # self.register_wandb(
-        #     user_name=kwargs.get('user_name', 'kxzhang2000'),
-        #     project_name=kwargs.get('project', 'Pro_func'),
-        #     group=kwargs.get('group', 'NER_V2')
-        # )
+        self.register_wandb(
+            user_name=kwargs.get('user_name', 'kxzhang2000'),
+            project_name=kwargs.get('project', 'Pro_func'),
+            group=kwargs.get('group', 'NER_V2')
+        )
 
         self.model, self.optimizer, self.train_loader, self.test_loader, self.lr_scheduler = self.accelerator.prepare(
             self.model, self.optimizer, self.train_loader, self.test_loader, self.lr_scheduler
@@ -277,7 +277,14 @@ class ProteinMaskTrainer(ProteinNERTrainer):
             for idx, sample in enumerate(batch_iterator):
                 input_ids, attention_mask, batch_label = sample
                 with self.accelerator.accumulate(self.model):
-                    logist = self.model(input_ids, attention_mask)
+                    try:
+                        logist = self.model(input_ids, attention_mask)
+                    except RuntimeError as exception:
+                        print('WARNING: out of memory, will pass this')
+                        if "out of memory" in str(exception):
+                            torch.cuda.empty_cache()
+                        else:
+                            raise exception
                     with self.accelerator.autocast():
                         loss = ProteinLoss.cross_entropy_loss(
                             pred=logist.permute(0, 2, 1),

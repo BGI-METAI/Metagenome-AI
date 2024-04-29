@@ -65,8 +65,8 @@ def register_parameters():
 
 
 def worker():
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
-    os.environ["WANDB_MODE"] = "offline"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    # os.environ["WANDB_MODE"] = "offline"
     args = register_parameters()
 
     # prepare dataset

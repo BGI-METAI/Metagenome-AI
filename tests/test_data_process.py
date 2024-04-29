@@ -1,4 +1,5 @@
 import os
+import pickle
 import random
 import unittest
 
@@ -41,3 +42,24 @@ class TestDataProcess(unittest.TestCase):
         if test_datas:
             with open(os.path.join(save_path, "test.txt"), "a") as f:
                 f.write("\n".join(test_datas) + "\n")
+
+    def test_check_pkl(self):
+        """check pkl file"""
+        import pandas as pd
+        train_path = "/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/03_datasets/train.txt"
+        save_dir = "/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/03_datasets/"
+
+        names, lens = [], []
+        with open(train_path, 'r') as f:
+            samples = f.readlines()
+            for sample in samples:
+                sample = sample.strip()
+                try:
+                    with open(sample, 'rb') as fp:
+                        data = pickle.load(fp)
+                        names.append(os.path.basename(sample))
+                        lens.append(len(data["seq"]))
+                except Exception as e:
+                    print(f"{sample} was error: {e}")
+        df = pd.DataFrame({"name": names, "lens": lens})
+        df.to_csv(os.path.join(save_dir, "test_analysis.csv"))

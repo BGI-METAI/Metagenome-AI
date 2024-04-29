@@ -149,8 +149,10 @@ class CustomMaskDataset(Dataset):
             self,
             processed_sequence_label_pairs_path: List[str],
             tokenizer_model_name_or_path: str,
+            max_token: int = 1024,
             **kwargs
     ):
+        self.max_token = max_token
         self.pairs_path = processed_sequence_label_pairs_path
         self.tokenizer = T5Tokenizer.from_pretrained(tokenizer_model_name_or_path, **kwargs)
         # add mask token in tokenizer, vocab_size = 28 + 1
@@ -162,7 +164,7 @@ class CustomMaskDataset(Dataset):
     def __getitem__(self, idx):
         with open(self.pairs_path[idx], 'rb') as file:
             data = pickle.load(file)
-        return {'seq': data['seq']}
+        return {'seq': data['seq'][:self.max_token]}
 
     def mask_tokens(self, inputs: torch.Tensor, mlm_probability: float = 0.15):
         """Prepare masked token input/labels for MLM: 80% MASK, 10% random, 10% original
