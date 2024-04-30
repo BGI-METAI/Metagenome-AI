@@ -1,5 +1,4 @@
 import pickle
-import warnings
 import random
 from typing import Dict, List
 
@@ -11,6 +10,7 @@ from transformers import Trainer, TrainingArguments
 import os
 import math
 
+# C:\Users\sukui\AppData\Local\JetBrains\PyCharm2021.3\remote_sources\-610422397\-1995996496\transformers\models\roberta\modeling_roberta.py
 
 model_dir = "/home/share/huadjyin/home/s_sukui/02_data/01_model/"
 model_name = "roberta-base"
@@ -21,7 +21,7 @@ out_model_path = os.path.join(model_dir, 'pretain')
 train_epoches = 10
 batch_size = 10
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
-# os.environ["WANDB_MODE"] = "offline"
+os.environ["WANDB_MODE"] = "offline"
 random.seed(42)
 
 # 这里不是从零训练，而是在原有预训练的基础上增加数据进行预训练，因此不会从 config 导入模型
