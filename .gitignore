@@ -174,3 +174,4 @@ output/
 configurations.json
 */config.py
 *.sh
+/tests/
