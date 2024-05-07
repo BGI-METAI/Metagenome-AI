@@ -1,3 +1,4 @@
+# Ref: https://colab.research.google.com/drive/1OT5IDtGIkMDL68GUj8rWKb4OYyHs18KW#scrollTo=PjXNXEVDj0ui
 import os
 import sklearn
 from copy import deepcopy
@@ -36,6 +37,7 @@ bnb_config = BitsAndBytesConfig(
     bnb_4bit_use_double_quant=False,
     bnb_4bit_quant_type="nf4",
     bnb_4bit_compute_dtype=torch.bfloat16,
+    # bnb_4bit_quant_storage=torch.uint8 # 需要拉去transfomers的torch-dtype-itemsize分支来修复bug
 )
 
 model = AutoModelForCausalLM.from_pretrained(
@@ -121,12 +123,7 @@ def get_max_length(model):
 
 
 # max_length = get_max_length(model)
-max_length = 128
-# tokenizer = tokenizer(
-#     random_sample["text"],
-#     max_length=max_length,
-#     truncation=True,
-# )
+max_length = 2048
 
 
 def preprocess_dataset(tokenizer: AutoTokenizer, max_length: int, dataset: str, seed: int = 42):
