@@ -6,21 +6,23 @@ from torch import nn, optim
 from torch.nn import BatchNorm1d, init
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from torch.utils.data import Dataset, SubsetRandomSampler, DataLoader
+from transformers import T5EncoderModel, T5Tokenizer
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class NSPData(Dataset):
-    def __init__(self, dataset, indices=False):
+    def __init__(self, dataset, tokenizer=None, indices=False):
         """ Constructor
         Args:
             X (np.array): The array that contains the training data
             y (np.array): The array that contains the test data
         """
-
+        self.AMINO_ACIDS = 'ACDEFGHIKLMNPQRSTVWY'
         self.data = torch.tensor(dataset['data'][:, :, :50]).float()
         self.targets = torch.tensor(dataset['data'][:, :, 50:68]).float()
         self.lengths = torch.tensor([sum(target[:, 0] == 1) for target in self.targets])
+        self.tokenizer = tokenizer
 
         self.unknown_nucleotide_mask()
 
@@ -50,6 +52,31 @@ class NSPData(Dataset):
     def __len__(self):
         """Returns the length of the data"""
         return len(self.data)
+
+    def collate_fn(self, batch_sample):
+        batch_seq, batch_label, attention_mask = [], [], []
+        for X, y, lengths in batch_sample:
+            seq_idx = X[:, :20].argmax(dim=1)
+            seq = " ".join([self.AMINO_ACIDS[idx] for idx in seq_idx[:-1]])
+            # seq_len = int(y[:, 0].sum())
+            # seq = seq[:seq_len]
+            batch_seq.append(seq)
+            batch_label.append(y)
+            attention_mask.append(y[:, 0].int())
+
+        tokens = self.tokenizer.batch_encode_plus(
+            batch_text_or_text_pairs=batch_seq,
+            padding='longest',
+            max_length=y.shape[0]
+        )
+
+        input_ids = torch.tensor(tokens['input_ids'])
+        attention_mask = torch.stack(attention_mask)
+        # for idx, val in enumerate(batch_label):
+        #     tag_tensor = torch.tensor(val)
+        #     batch_label[idx] = torch.nn.functional.pad(tag_tensor, (0, input_ids.shape[1] - tag_tensor.shape[0]))
+        batch_label = torch.stack(batch_label)
+        return input_ids, attention_mask, batch_label
 
 
 class MaskedBatchNorm1d(nn.Module):
@@ -247,6 +274,38 @@ class NSP_Network(nn.Module):
         return [ss8, ss3, disorder, rsa, phi, psi]
 
 
+class ConvNet(torch.nn.Module):
+    def __init__(self):
+        super(ConvNet, self).__init__()
+        # This is only called "elmo_feature_extractor" for historic reason
+        # CNN weights are trained on ProtT5 embeddings
+        self.elmo_feature_extractor = torch.nn.Sequential(
+            torch.nn.Conv2d(1024, 32, kernel_size=(7, 1), padding=(3, 0)),  # 7x32
+            torch.nn.ReLU(),
+            torch.nn.Dropout(0.25),
+        )
+        n_final_in = 32
+        self.dssp3_classifier = torch.nn.Sequential(
+            torch.nn.Conv2d(n_final_in, 3, kernel_size=(7, 1), padding=(3, 0))  # 7
+        )
+
+        self.dssp8_classifier = torch.nn.Sequential(
+            torch.nn.Conv2d(n_final_in, 8, kernel_size=(7, 1), padding=(3, 0))
+        )
+        self.diso_classifier = torch.nn.Sequential(
+            torch.nn.Conv2d(n_final_in, 2, kernel_size=(7, 1), padding=(3, 0))
+        )
+
+    def forward(self, x):
+        # IN: X = (B x L x F); OUT: (B x F x L, 1)
+        x = x.permute(0, 2, 1).unsqueeze(dim=-1)
+        x = self.elmo_feature_extractor(x)  # OUT: (B x 32 x L x 1)
+        d3_Yhat = self.dssp3_classifier(x).squeeze(dim=-1).permute(0, 2, 1)  # OUT: (B x L x 3)
+        d8_Yhat = self.dssp8_classifier(x).squeeze(dim=-1).permute(0, 2, 1)  # OUT: (B x L x 8)
+        diso_Yhat = self.diso_classifier(x).squeeze(dim=-1).permute(0, 2, 1)  # OUT: (B x L x 2)
+        return d3_Yhat, d8_Yhat, diso_Yhat
+
+
 class MultiTaskLoss(nn.Module):
     """ Weighs multiple loss functions by considering the
         homoscedastic uncertainty of each task """
@@ -373,6 +432,28 @@ def init_model(initial_channels, hidden_neurons, learning_rate):
     return nsp_net, criterion, optimizer
 
 
+def load_sec_struct_model():
+    checkpoint_dir = "/home/share/huadjyin/home/s_sukui/02_data/01_model/protT5/secstruct_checkpoint.pt"
+    state = torch.load(checkpoint_dir)
+    model = ConvNet()
+    model.load_state_dict(state['state_dict'])
+    model = model.eval()
+    model = model.to(device)
+    print('Loaded sec. struct. model from epoch: {:.1f}'.format(state['epoch']))
+
+    return model
+
+
+def get_T5_model():
+    model_path_or_name = "/home/share/huadjyin/home/zhangchao5/weight/prot_t5_xl_half_uniref50-enc"
+    model = T5EncoderModel.from_pretrained(model_path_or_name)
+    model = model.to(device)  # move model to GPU
+    model = model.eval()  # set model to evaluation model
+    tokenizer = T5Tokenizer.from_pretrained(model_path_or_name, do_lower_case=False)
+
+    return model, tokenizer
+
+
 def split_dataset(batch_size, dataset):
     """ Splits the dataset into train and validation
     Args:
@@ -479,12 +560,46 @@ def evaluate_ss3(outputs, labels, mask):
     return accuracy(outputs, labels)
 
 
+# def evaluation(model, dataset):
+#     # iterate through the evaluation dataset
+#     with torch.no_grad():
+#         for data in dataset:
+#             # move data tensors to GPU if possible
+#             inputs, labels, lengths = data
+#             inputs, labels = inputs.to(device), labels.to(device)
+#
+#             # add evaluation mask to the masks
+#             evaluation_mask = labels[:, :, 2]
+#
+#             zero_mask = labels[:, :, 0] * evaluation_mask
+#
+#             # get predictions
+#             # model = model.to(device)
+#             predictions = model(inputs, lengths, zero_mask)  # predict values
+#
+#             # move predictions to cpu
+#             for i in range(len(predictions)):
+#                 predictions[i] = predictions[i].cpu()
+#
+#             labels = labels.cpu()
+#             zero_mask = zero_mask.cpu()
+#
+#             # evaluate
+#             ss3 = evaluate_ss3(predictions[1], labels, zero_mask)
+#
+#             torch.cuda.empty_cache()
+#
+#             print("SS3 [Q3]: {}".format(round(ss3, 3)))
+
 def evaluation(model, dataset):
     # iterate through the evaluation dataset
+    sec_struct_model = load_sec_struct_model()
+    ss3_scores = []
     with torch.no_grad():
         for data in dataset:
             # move data tensors to GPU if possible
-            inputs, labels, lengths = data
+            # input_ids, attention_mask, batch_label
+            inputs, attention_mask, labels = data
             inputs, labels = inputs.to(device), labels.to(device)
 
             # add evaluation mask to the masks
@@ -494,21 +609,26 @@ def evaluation(model, dataset):
 
             # get predictions
             # model = model.to(device)
-            predictions = model(inputs, lengths, zero_mask)  # predict values
+            embedding_repr = model(inputs, evaluation_mask)  # predict values
+
+            d3_Yhat, d8_Yhat, diso_Yhat = sec_struct_model(embedding_repr.last_hidden_state)
 
             # move predictions to cpu
-            for i in range(len(predictions)):
-                predictions[i] = predictions[i].cpu()
+            # for i in range(len(predictions)):
+            #     predictions[i] = predictions[i].cpu()
+            d3_Yhat = d3_Yhat.cpu()
 
             labels = labels.cpu()
             zero_mask = zero_mask.cpu()
 
             # evaluate
-            ss3 = evaluate_ss3(predictions[1], labels, zero_mask)
+            ss3 = evaluate_ss3(d3_Yhat, labels, zero_mask)
+            print("SS3 [Q3]: {}".format(ss3, 3))
+            ss3_scores.append(ss3)
 
-            torch.cuda.empty_cache()
+        torch.cuda.empty_cache()
 
-            print("SS3 [Q3]: {}".format(round(ss3, 3)))
+        print("SS3 [Q3]: {}".format(round(np.array(ss3_scores).mean(), 3)))
 
 
 def main():
@@ -542,11 +662,16 @@ def main():
     # )
     #
     # nsp_mmseqs = init_model(initial_channels, hidden_neurons, learning_rate)
-
+    model, tokenizer = get_T5_model()
     print("Evaluation HHblits...")
-    CB513_hhblits = DataLoader(NSPData(CB513_hhblits), batch_size=len(CB513_hhblits['data']))
+    cb513_data = NSPData(CB513_hhblits, tokenizer=tokenizer)
+    CB513_hhblits = DataLoader(
+        dataset=cb513_data,
+        batch_size=3,
+        collate_fn=cb513_data.collate_fn
+    )
     print("\nCB513")
-    evaluation(nsp_hhblits[0], CB513_hhblits)
+    evaluation(model, CB513_hhblits)
 
 
 if __name__ == '__main__':
