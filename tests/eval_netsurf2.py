@@ -3,7 +3,7 @@ import os
 import numpy as np
 import torch
 from torch import nn, optim
-from torch.nn import BatchNorm1d
+from torch.nn import BatchNorm1d, init
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from torch.utils.data import Dataset, SubsetRandomSampler, DataLoader
 
@@ -52,24 +52,100 @@ class NSPData(Dataset):
         return len(self.data)
 
 
-def prep_data(data_dir: str):
+class MaskedBatchNorm1d(nn.Module):
+    """ A masked version of nn.BatchNorm1d. Only tested for 3D inputs.
+        Args:
+            num_features: :math:`C` from an expected input of size
+                :math:`(N, C, L)`
+            eps: a value added to the denominator for numerical stability.
+                Default: 1e-5
+            momentum: the value used for the running_mean and running_var
+                computation. Can be set to ``None`` for cumulative moving average
+                (i.e. simple average). Default: 0.1
+            affine: a boolean value that when set to ``True``, this module has
+                learnable affine parameters. Default: ``True``
+            track_running_stats: a boolean value that when set to ``True``, this
+                module tracks the running mean and variance, and when set to ``False``,
+                this module does not track such statistics and always uses batch
+                statistics in both training and eval modes. Default: ``True``
+        Shape:
+            - Input: :math:`(N, C, L)`
+            - input_mask: (N, 1, L) tensor of ones and zeros, where the zeros indicate locations not to use.
+            - Output: :math:`(N, C)` or :math:`(N, C, L)` (same shape as input)
     """
-    each data is compressed as a numpy zip and the dimensions of the dataset: [sequence, position, label]
-    [0:20] Amino Acids (sparse encoding) (Unknown residues are stored as an all-zero vector)
-    [20:50] hmm profile
-    [50] Seq mask (1 = seq, 0 = empty)
-    [51] Disordered mask (0 = disordered, 1 = ordered)
-    [52] Evaluation mask (For CB513 dataset, 1 = eval, 0 = ignore)
-    [53] ASA (isolated)
-    [54] ASA (complexed)
-    [55] RSA (isolated)
-    [56] RSA (complexed)
-    [57:65] Q8 GHIBESTC (Q8 -> Q3: HHHEECCC)
-    [65:67] Phi+Psi
-    :param data_dir: root path of the data
-    :return:
-    """
-    pass
+
+    def __init__(self, num_features, eps=1e-5, momentum=0.1,
+                 affine=True, track_running_stats=True):
+        super(MaskedBatchNorm1d, self).__init__()
+        self.num_features = num_features
+        self.eps = eps
+        self.momentum = momentum
+        self.affine = affine
+        if affine:
+            self.weight = nn.Parameter(torch.Tensor(num_features, 1))
+            self.bias = nn.Parameter(torch.Tensor(num_features, 1))
+        else:
+            self.register_parameter('weight', None)
+            self.register_parameter('bias', None)
+        self.track_running_stats = track_running_stats
+        if self.track_running_stats:
+            self.register_buffer('running_mean', torch.zeros(num_features, 1))
+            self.register_buffer('running_var', torch.ones(num_features, 1))
+            self.register_buffer('num_batches_tracked', torch.tensor(0, dtype=torch.long))
+        else:
+            self.register_parameter('running_mean', None)
+            self.register_parameter('running_var', None)
+            self.register_parameter('num_batches_tracked', None)
+        self.reset_parameters()
+
+    def reset_running_stats(self):
+        if self.track_running_stats:
+            self.running_mean.zero_()
+            self.running_var.fill_(1)
+            self.num_batches_tracked.zero_()
+
+    def reset_parameters(self):
+        self.reset_running_stats()
+        if self.affine:
+            init.ones_(self.weight)
+            init.zeros_(self.bias)
+
+    def forward(self, input, input_mask=None):
+        # Calculate the masked mean and variance
+        B, C, L = input.shape
+        if input_mask is not None and input_mask.shape != (B, 1, L):
+            raise ValueError('Mask should have shape (B, 1, L).')
+        if C != self.num_features:
+            raise ValueError('Expected %d channels but input has %d channels' % (self.num_features, C))
+        if input_mask is not None:
+            masked = input * input_mask
+            n = input_mask.sum()
+        else:
+            masked = input
+            n = B * L
+        # Sum
+        masked_sum = masked.sum(dim=0, keepdim=True).sum(dim=2, keepdim=True)
+        # Divide by sum of mask
+        current_mean = masked_sum / n
+        current_var = ((masked - current_mean) ** 2).sum(dim=0, keepdim=True).sum(dim=2, keepdim=True) / n
+        # Update running stats
+        if self.track_running_stats and self.training:
+            if self.num_batches_tracked == 0:
+                self.running_mean = current_mean
+                self.running_var = current_var
+            else:
+                self.running_mean = (1 - self.momentum) * self.running_mean + self.momentum * current_mean
+                self.running_var = (1 - self.momentum) * self.running_var + self.momentum * current_var
+            self.num_batches_tracked += 1
+        # Norm the input
+        if self.track_running_stats and not self.training:
+            normed = (masked - self.running_mean) / (torch.sqrt(self.running_var + self.eps))
+        else:
+            normed = (masked - current_mean) / (torch.sqrt(current_var + self.eps))
+        # Apply affine parameters
+        if self.affine:
+            normed = normed * self.weight + self.bias
+        return normed
 
 
 class NSP_Network(nn.Module):
@@ -94,7 +170,7 @@ class NSP_Network(nn.Module):
             nn.ReLU(),
         ])
 
-        self.batch_norm = BatchNorm1d(init_channels + 64)
+        self.batch_norm = MaskedBatchNorm1d(init_channels + 64)
 
         # LSTM block
         self.lstm = nn.LSTM(input_size=init_channels + 64, hidden_size=n_hidden, batch_first=True, \
@@ -149,7 +225,7 @@ class NSP_Network(nn.Module):
         x = torch.cat([x, r1, r2], dim=1)
 
         # normalize
-        # x = self.batch_norm(x, mask.unsqueeze(1))
+        x = self.batch_norm(x, mask.unsqueeze(1))
 
         # calculate double layer bidirectional lstm
         x = x.permute(0, 2, 1)
@@ -384,6 +460,57 @@ def training(epochs, model, criterion, optimizer, dataset):
     return training_loss, validation_loss
 
 
+def accuracy(pred, labels):
+    """ Accuracy coefficient
+    Args:
+        inputs (1D Tensor): vector with predicted integer values
+        labels (1D Tensor): vector with correct integer values
+    """
+
+    return (sum((pred == labels)) / len(labels)).item()
+
+
+def evaluate_ss3(outputs, labels, mask):
+    structure_mask = torch.tensor([0, 0, 0, 1, 1, 2, 2, 2])
+
+    labels = torch.max(labels[:, :, 7:15] * structure_mask, dim=2)[0].long()[mask == 1]
+    outputs = torch.argmax(outputs, dim=2)[mask == 1]
+
+    return accuracy(outputs, labels)
+
+
+def evaluation(model, dataset):
+    # iterate through the evaluation dataset
+    with torch.no_grad():
+        for data in dataset:
+            # move data tensors to GPU if possible
+            inputs, labels, lengths = data
+            inputs, labels = inputs.to(device), labels.to(device)
+
+            # add evaluation mask to the masks
+            evaluation_mask = labels[:, :, 2]
+
+            zero_mask = labels[:, :, 0] * evaluation_mask
+
+            # get predictions
+            # model = model.to(device)
+            predictions = model(inputs, lengths, zero_mask)  # predict values
+
+            # move predictions to cpu
+            for i in range(len(predictions)):
+                predictions[i] = predictions[i].cpu()
+
+            labels = labels.cpu()
+            zero_mask = zero_mask.cpu()
+
+            # evaluate
+            ss3 = evaluate_ss3(predictions[1], labels, zero_mask)
+
+            torch.cuda.empty_cache()
+
+            print("SS3 [Q3]: {}".format(round(ss3, 3)))
+
+
 def main():
     data_dir = "/home/share/huadjyin/home/s_sukui/02_data/05_meta/netsurf/2.0/"
     assert os.path.exists(data_dir), f"{data_dir} is not exit"
@@ -407,14 +534,19 @@ def main():
     nsp_hhblits = init_model(initial_channels, hidden_neurons, learning_rate)
     train_hhblits = split_dataset(batch_size, CB513_hhblits)
 
-    training_loss, evaluation_loss = training(
-        epochs, nsp_hhblits[0],
-        nsp_hhblits[1],
-        nsp_hhblits[2],
-        train_hhblits
-    )
+    # training_loss, evaluation_loss = training(
+    #     epochs, nsp_hhblits[0],
+    #     nsp_hhblits[1],
+    #     nsp_hhblits[2],
+    #     train_hhblits
+    # )
+    #
+    # nsp_mmseqs = init_model(initial_channels, hidden_neurons, learning_rate)
 
-    nsp_mmseqs = init_model(initial_channels, hidden_neurons, learning_rate)
+    print("Evaluation HHblits...")
+    CB513_hhblits = DataLoader(NSPData(CB513_hhblits), batch_size=len(CB513_hhblits['data']))
+    print("\nCB513")
+    evaluation(nsp_hhblits[0], CB513_hhblits)
 
 
 if __name__ == '__main__':
