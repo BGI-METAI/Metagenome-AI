@@ -92,10 +92,11 @@ def get_downstream_model(download_model_path: str):
     :param download_model_path: model path
     :return: model
     """
-    assert os.path.exists(download_model_path), f"{download_model_path} not exit"
-    state = torch.load(download_model_path)
     model = NetsurfConvModel()
-    model.load_state_dict(state['state_dict'])
+    if os.path.exists(download_model_path):
+        state = torch.load(download_model_path)
+        model.load_state_dict(state['state_dict'])
+        logging.info(f"load state ckpt from: {download_model_path}")
     model = model.to(device)
     model = model.eval()
     logging.info('Loaded sec. struct. model from epoch: {:.1f}'.format(state['epoch']))
@@ -324,7 +325,6 @@ def training(epochs, base_model, downstream_model, criterion, optimizer, dataset
             print("Early stopping")
             break
 
-
     # load the last checkpoint with the best model
     downstream_model.load_state_dict(torch.load('checkpoint.pt'))
 
@@ -359,6 +359,114 @@ def split_dataset(batch_size, dataset, tokenizer=None):
     return training_set, validation_set
 
 
+def accuracy(pred, labels):
+    """ Accuracy coefficient
+    Args:
+        inputs (1D Tensor): vector with predicted integer values
+        labels (1D Tensor): vector with correct integer values
+    """
+
+    return (sum((pred == labels)) / len(labels)).item()
+
+
+def fpr(pred, labels):
+    """ False positive rate
+    Args:
+        inputs (1D Tensor): vector with predicted binary numeric values
+        labels (1D Tensor): vector with correct binary numeric values
+    """
+    fp = sum((pred == 1) & (labels == 0))
+    tn = sum((pred == 0) & (labels == 0))
+
+    return (fp / (fp + tn)).item()
+
+
+def mcc(pred, labels):
+    """ Mathews correlation coefficient
+    Args:
+        inputs (1D Tensor): vector with predicted binary numeric values
+        labels (1D Tensor): vector with correct binary numeric values
+    """
+    fp = sum((pred == 1) & (labels == 0))
+    tp = sum((pred == 1) & (labels == 1))
+    fn = sum((pred == 0) & (labels == 1))
+    tn = sum((pred == 0) & (labels == 0))
+
+    return ((tp * tn - fp * fn) / torch.sqrt(((tp + fp) * (fn + tn) * (tp + fn) * (fp + tn)).float())).item()
+
+
+def evaluate_ss3(outputs, labels, mask):
+    structure_mask = torch.tensor([0, 0, 0, 1, 1, 2, 2, 2])
+
+    labels = torch.max(labels[:, :, 7:15] * structure_mask, dim=2)[0].long()[mask == 1]
+    outputs = torch.argmax(outputs, dim=2)[mask == 1]
+
+    return accuracy(outputs, labels)
+
+
+def evaluate_ss8(outputs, labels, mask):
+    labels = torch.argmax(labels[:, :, 7:15], dim=2)[mask == 1]
+    outputs = torch.argmax(outputs, dim=2)[mask == 1]
+
+    return accuracy(outputs, labels)
+
+
+def evaluate_dis(outputs, labels, mask, metric="fpr"):
+    labels = labels[:, :, 1].unsqueeze(2)
+    labels = torch.argmax(torch.cat([labels, 1 - labels], dim=2), dim=2)[mask == 1]
+    outputs = torch.argmax(outputs, dim=2)[mask == 1]
+    if metric == "fpr":
+        return fpr(outputs, labels)
+    else:
+        return mcc(outputs, labels)
+
+
+def evaluation(base_model, downstream_model, dataset):
+    # iterate through the evaluation dataset
+    ss3_scores = []
+    ss8_scores = []
+    diso_scores = []
+    with torch.no_grad():
+        for data in dataset:
+            # move data tensors to GPU if possible
+            # input_ids, attention_mask, batch_label
+            inputs, attention_mask, labels = data
+            inputs, labels = inputs.to(device), labels.to(device)
+
+            # add evaluation mask to the masks
+            evaluation_mask = labels[:, :, 2]
+            zero_mask = labels[:, :, 0] * evaluation_mask
+
+            # get predictions
+            # model = model.to(device)
+            embedding_repr = base_model(inputs, evaluation_mask)  # predict values
+
+            d3_Yhat, d8_Yhat, diso_Yhat = downstream_model(embedding_repr.last_hidden_state)
+            d3_Yhat = d3_Yhat.cpu()
+            d8_Yhat = d8_Yhat.cpu()
+            diso_Yhat = diso_Yhat.cpu()
+
+            labels = labels.cpu()
+            zero_mask = zero_mask.cpu()
+
+            # evaluate
+            ss3 = evaluate_ss3(d3_Yhat, labels, zero_mask)
+            print("SS3 [Q3]: {}".format(ss3, 3))
+            ss3_scores.append(ss3)
+            ss8 = evaluate_ss8(d8_Yhat, labels, zero_mask)
+            print("SS8 [Q8]: {}".format(ss8, 3))
+            ss8_scores.append(ss8)
+            diso = evaluate_dis(diso_Yhat, labels, zero_mask)
+            print("DISO [diso]: {}".format(diso, 3))
+            diso_scores.append(diso)
+
+        torch.cuda.empty_cache()
+
+        print("SS3 [Q3]: {}".format(round(np.array(ss3_scores).mean(), 3)))
+        print("SS8 [Q8]: {}".format(round(np.array(ss8_scores).mean(), 3)))
+        print("DISO [DISO]: {}".format(round(np.array(diso_scores).mean(), 3)))
+
+
 def main():
     args = register_parameters()
     logging.debug(f"parameters: {args}")
@@ -368,13 +476,26 @@ def main():
     epoch = args.epoch
 
     base_model, tokenizer = get_base_model(args.base_model_path_or_name)
-    downstream_model = get_downstream_model(args.downstream_model_path_or_name)
-    criterion = MultiTaskLoss()
-    optimizer = optim.Adam([{"params": downstream_model.parameters()}])
-    dataset = np.load(args.train_data_dir + "CB513_HHblits.npz")
-    dataset = split_dataset(batch_size, dataset, tokenizer)
+    if os.path.exists(args.downstream_model_path_or_name) is False:
+        downstream_model = get_downstream_model(args.downstream_model_path_or_name)
+        criterion = MultiTaskLoss()
+        optimizer = optim.Adam([{"params": downstream_model.parameters()}])
+        dataset = np.load(args.train_data_dir + "CB513_HHblits.npz")
+        dataset = split_dataset(batch_size, dataset, tokenizer)
 
-    training(epoch, base_model, downstream_model, criterion, optimizer, dataset=dataset)
+        training(0, base_model, downstream_model, criterion, optimizer, dataset=dataset)
+    else:
+        downstream_model = get_downstream_model(args.downstream_model_path_or_name)
+
+    print("Evaluation HHblits...")
+    CB513_hhblits = np.load(args.train_data_dir + "CB513_HHblits.npz")
+    cb513_data = NSPData(CB513_hhblits, tokenizer=tokenizer)
+    CB513_hhblits = DataLoader(
+        dataset=cb513_data,
+        batch_size=3,
+        collate_fn=cb513_data.collate_fn
+    )
+    evaluation(base_model, downstream_model, CB513_hhblits)
     logging.info("finished..")
 
 
