@@ -12,6 +12,8 @@ from transformers import T5EncoderModel, T5Tokenizer
 # from proteinNER.base_module.dataset import NSPData
 # from proteinNER.classifier.loss_fn import MultiTaskLoss
 # from proteinNER.classifier.model import NetsurfConvModel
+from proteinNER.classifier.model import ProtTransT5MaskPretrainModel, ProtTransT5MaskPEFTModel
+from proteinNER.classifier.trainer import ProteinMaskTrainer
 from tests.eval_netsurf2 import NSPData, NetsurfConvModel
 
 
@@ -48,7 +50,7 @@ def register_parameters():
                         help='the number of categories')  # PFAM: 20794, GENE3D: 6595
     parser.add_argument('--add_background', action='store_true', help='add background type to the final categories')
 
-    parser.add_argument('--epoch', type=int, default=100)
+    parser.add_argument('--epoch', type=int, default=3)
     parser.add_argument('--learning_rate', type=float, default=5e-5)
     parser.add_argument('--loss_weight', type=float, default=1.)
     parser.add_argument('--patience', type=int, default=1)
@@ -78,6 +80,41 @@ def get_base_model(base_model_path: str):
     # base_model_path = "/home/share/huadjyin/home/zhangchao5/weight/prot_t5_xl_half_uniref50-enc"
     assert os.path.exists(base_model_path), f"{base_model_path} not exits"
     model = T5EncoderModel.from_pretrained(base_model_path)  # move model to GPU
+    model = model.eval()  # set model to evaluation model
+    model = model.to(device)  # set model to evaluation model
+    tokenizer = T5Tokenizer.from_pretrained(base_model_path, do_lower_case=False)
+    logging.info(f"loading base model from: {base_model_path}")
+
+    return model, tokenizer
+
+def get_base_lora_model(base_model_path: str):
+    """
+    get base model, which including last_hidden_embedding
+    :param base_model_path: model path
+    :return: model and tokenizer
+    """
+    # base_model_path = "/home/share/huadjyin/home/zhangchao5/weight/prot_t5_xl_half_uniref50-enc"
+    assert os.path.exists(base_model_path), f"{base_model_path} not exits"
+
+    trainer = ProteinMaskTrainer(
+        output_home="/home/share/huadjyin/home/s_sukui/03_project/01_GeneLLM/Metagenome-AI/output",
+        k=5
+    )
+    model = ProtTransT5MaskPEFTModel(
+        model_name_or_path=base_model_path,
+        num_classes=28,
+    )
+    trainer.register_model(
+        model=model,
+        reuse=False,
+        is_trainable=False,
+        learning_rate=5e-5,
+        mode="best"
+    )
+    trainer.load_ckpt(mode="best")
+    model = model.embedding
+    # model = T5EncoderModel.from_pretrained(base_model_path)  # move model to GPU
+
     model = model.eval()  # set model to evaluation model
     model = model.to(device)  # set model to evaluation model
     tokenizer = T5Tokenizer.from_pretrained(base_model_path, do_lower_case=False)
@@ -440,8 +477,12 @@ def evaluation(base_model, downstream_model, dataset):
             # get predictions
             # model = model.to(device)
             embedding_repr = base_model(inputs, evaluation_mask)  # predict values
+            if hasattr(embedding_repr, "last_hidden_state"):
+                embedding = embedding_repr.last_hidden_state
+            else:
+                embedding = embedding_repr
 
-            d3_Yhat, d8_Yhat, diso_Yhat = downstream_model(embedding_repr.last_hidden_state)
+            d3_Yhat, d8_Yhat, diso_Yhat = downstream_model(embedding)
             d3_Yhat = d3_Yhat.cpu()
             d8_Yhat = d8_Yhat.cpu()
             diso_Yhat = diso_Yhat.cpu()
@@ -475,7 +516,7 @@ def main():
     batch_size = args.batch_size
     epoch = args.epoch
 
-    base_model, tokenizer = get_base_model(args.base_model_path_or_name)
+    base_model, tokenizer = get_base_lora_model(args.base_model_path_or_name)
     if os.path.exists(args.downstream_model_path_or_name) is False:
         downstream_model = get_downstream_model(args.downstream_model_path_or_name)
         criterion = MultiTaskLoss()
@@ -483,7 +524,7 @@ def main():
         dataset = np.load(args.train_data_dir + "CB513_HHblits.npz")
         dataset = split_dataset(batch_size, dataset, tokenizer)
 
-        training(0, base_model, downstream_model, criterion, optimizer, dataset=dataset)
+        training(epoch, base_model, downstream_model, criterion, optimizer, dataset=dataset)
     else:
         downstream_model = get_downstream_model(args.downstream_model_path_or_name)
 
