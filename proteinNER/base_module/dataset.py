@@ -227,3 +227,75 @@ class CustomMaskDataset(Dataset):
             return [' '.join(list(seq)) for seq in sequence]
         else:
             return sequence
+
+
+class NSPData(Dataset):
+    def __init__(self, dataset, tokenizer=None, indices=False):
+        """ Constructor
+        url: https://github.com/Eryk96/NetSurfP-3.0/tree/main
+        Args:
+            X (np.array): The array that contains the training data
+            y (np.array): The array that contains the test data
+        """
+        self.AMINO_ACIDS = 'ACDEFGHIKLMNPQRSTVWY'
+        self.data = torch.tensor(dataset['data'][:, :, :50]).float()
+        self.targets = torch.tensor(dataset['data'][:, :, 50:68]).float()
+        self.lengths = torch.tensor([sum(target[:, 0] == 1) for target in self.targets])
+        self.tokenizer = tokenizer
+
+        self.unknown_nucleotide_mask()
+
+    def unknown_nucleotide_mask(self):
+        """ Augments the target with a unknown nucleotide mask
+            by finding entries that don't have any residue
+        """
+
+        # creates a mask based on the one hot encoding
+        unknown_nucleotides = torch.max(self.data[:, :, :20], dim=2)
+        unknown_nucleotides = unknown_nucleotides[0].unsqueeze(2)
+
+        # merge the mask to first position of the targets
+        self.targets = torch.cat([self.targets, unknown_nucleotides], dim=2)
+
+    def __getitem__(self, index):
+        """ Returns train and test data at an index
+        Args:
+            index (int): Index at the array
+        """
+        X = self.data[index]
+        y = self.targets[index]
+        lengths = self.lengths[index]
+
+        return X, y, lengths
+
+    def __len__(self):
+        """Returns the length of the data"""
+        return len(self.data)
+
+    def collate_fn(self, batch_sample):
+        if self.tokenizer is None:
+            raise NotImplementedError(f"not provide tokenizer. {self.tokenizer}")
+
+        batch_seq, batch_label, attention_mask = [], [], []
+        for X, y, lengths in batch_sample:
+            seq_idx = X[:, :20].argmax(dim=1)
+            seq = " ".join([self.AMINO_ACIDS[idx] for idx in seq_idx[:-1]])
+            # seq_len = int(y[:, 0].sum())
+            # seq = seq[:seq_len]
+            batch_seq.append(seq)
+            batch_label.append(y)
+            attention_mask.append(y[:, 0].int())
+
+        tokens = self.tokenizer.batch_encode_plus(
+            batch_text_or_text_pairs=batch_seq,
+            padding='longest',
+            max_length=y.shape[0]
+        )
+
+        input_ids = torch.tensor(tokens['input_ids'])
+        attention_mask = torch.stack(attention_mask)
+        # for idx, val in enumerate(batch_label):
+        #     tag_tensor = torch.tensor(val)
+        #     batch_label[idx] = torch.nn.functional.pad(tag_tensor, (0, input_ids.shape[1] - tag_tensor.shape[0]))
+        batch_label = torch.stack(batch_label)
+        return input_ids, attention_mask, batch_label
