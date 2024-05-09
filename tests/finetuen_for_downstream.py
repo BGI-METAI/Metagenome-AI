@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import random
+import sys
 
 import numpy as np
 import torch
@@ -9,12 +10,12 @@ from torch import optim, nn
 from torch.utils.data import SubsetRandomSampler, DataLoader
 from transformers import T5EncoderModel, T5Tokenizer
 
-# from proteinNER.base_module.dataset import NSPData
-# from proteinNER.classifier.loss_fn import MultiTaskLoss
-# from proteinNER.classifier.model import NetsurfConvModel
-from proteinNER.classifier.model import ProtTransT5MaskPretrainModel, ProtTransT5MaskPEFTModel
+sys.path.insert(0, "..")
+from proteinNER.base_module.dataset import NSPData
+from proteinNER.classifier.loss_fn import MultiTaskLoss
+from proteinNER.classifier.model import NetsurfConvModel
+from proteinNER.classifier.model import ProtTransT5MaskPEFTModel
 from proteinNER.classifier.trainer import ProteinMaskTrainer
-from tests.eval_netsurf2 import NSPData, NetsurfConvModel
 
 
 def register_parameters():
@@ -87,6 +88,7 @@ def get_base_model(base_model_path: str):
 
     return model, tokenizer
 
+
 def get_base_lora_model(base_model_path: str):
     """
     get base model, which including last_hidden_embedding
@@ -112,7 +114,7 @@ def get_base_lora_model(base_model_path: str):
         mode="best"
     )
     trainer.load_ckpt(mode="best")
-    model = model.embedding
+    model = trainer.model.embedding
     # model = T5EncoderModel.from_pretrained(base_model_path)  # move model to GPU
 
     model = model.eval()  # set model to evaluation model

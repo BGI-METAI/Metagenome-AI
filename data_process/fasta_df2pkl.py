@@ -62,7 +62,7 @@ def main():
 
         save_folder_name = file.split('.')[0]
         save_folder_path = osp.join(args.output_dir, save_folder_name)
-
+        print(f"process file: {os.path.join(args.data_dir, file)}")
         os.makedirs(save_folder_path, exist_ok=True)
 
         process_file(args.data_dir, file, save_folder_path)

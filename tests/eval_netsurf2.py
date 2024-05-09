@@ -3,7 +3,7 @@ import os
 import numpy as np
 import torch
 from torch import nn, optim
-from torch.nn import BatchNorm1d, init
+from torch.nn import init
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from torch.utils.data import Dataset, SubsetRandomSampler, DataLoader
 from transformers import T5EncoderModel, T5Tokenizer
@@ -12,7 +12,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class NSPData(Dataset):
-    def __init__(self, dataset, tokenizer=None, indices=False):
+    def __init__(self, dataset, tokenizer=None):
         """ Constructor
         Args:
             X (np.array): The array that contains the training data
@@ -54,12 +54,13 @@ class NSPData(Dataset):
         return len(self.data)
 
     def collate_fn(self, batch_sample):
+        if self.tokenizer is None:
+            raise NotImplementedError(f"not provide tokenizer: {self.tokenizer}")
+
         batch_seq, batch_label, attention_mask = [], [], []
         for X, y, lengths in batch_sample:
             seq_idx = X[:, :20].argmax(dim=1)
             seq = " ".join([self.AMINO_ACIDS[idx] for idx in seq_idx[:-1]])
-            # seq_len = int(y[:, 0].sum())
-            # seq = seq[:seq_len]
             batch_seq.append(seq)
             batch_label.append(y)
             attention_mask.append(y[:, 0].int())
@@ -72,9 +73,6 @@ class NSPData(Dataset):
 
         input_ids = torch.tensor(tokens['input_ids'])
         attention_mask = torch.stack(attention_mask)
-        # for idx, val in enumerate(batch_label):
-        #     tag_tensor = torch.tensor(val)
-        #     batch_label[idx] = torch.nn.functional.pad(tag_tensor, (0, input_ids.shape[1] - tag_tensor.shape[0]))
         batch_label = torch.stack(batch_label)
         return input_ids, attention_mask, batch_label
 
@@ -274,9 +272,9 @@ class NSP_Network(nn.Module):
         return [ss8, ss3, disorder, rsa, phi, psi]
 
 
-class ConvNet(torch.nn.Module):
+class NetsurfConvModel(torch.nn.Module):
     def __init__(self):
-        super(ConvNet, self).__init__()
+        super(NetsurfConvModel, self).__init__()
         # This is only called "elmo_feature_extractor" for historic reason
         # CNN weights are trained on ProtT5 embeddings
         self.elmo_feature_extractor = torch.nn.Sequential(
@@ -310,9 +308,10 @@ class MultiTaskLoss(nn.Module):
     """ Weighs multiple loss functions by considering the
         homoscedastic uncertainty of each task """
 
-    def __init__(self):
+    def __init__(self, device="cpu"):
         super(MultiTaskLoss, self).__init__()
         self.log_vars = nn.Parameter(torch.zeros((6)))
+        self.device=device
 
     def mse(self, outputs, labels, mask):
         loss = torch.square(outputs - labels) * mask
@@ -331,7 +330,7 @@ class MultiTaskLoss(nn.Module):
         return self.cross_entropy(outputs, labels, mask)
 
     def ss3(self, outputs, labels, mask):
-        structure_mask = torch.tensor([0, 0, 0, 1, 1, 2, 2, 2]).to(device)
+        structure_mask = torch.tensor([0, 0, 0, 1, 1, 2, 2, 2]).to(self.device)
 
         labels = torch.max(labels[:, :, 7:15] * structure_mask, dim=2)[0].long()
         outputs = outputs[1].permute(0, 2, 1)
@@ -363,7 +362,7 @@ class MultiTaskLoss(nn.Module):
         mask = torch.cat(2 * [mask.unsqueeze(2)], dim=2)
 
         loss = self.mse(outputs.squeeze(2),
-                        torch.cat((torch.sin(dihedral_to_radians(labels)), torch.cos(dihedral_to_radians(labels))),
+                        torch.cat((torch.sin(self.dihedral_to_radians(labels)), torch.cos(self.dihedral_to_radians(labels))),
                                   dim=2).squeeze(2), mask)
         return loss
 
@@ -375,7 +374,7 @@ class MultiTaskLoss(nn.Module):
         mask = torch.cat(2 * [mask.unsqueeze(2)], dim=2)
 
         loss = self.mse(outputs.squeeze(2),
-                        torch.cat((torch.sin(dihedral_to_radians(labels)), torch.cos(dihedral_to_radians(labels))),
+                        torch.cat((torch.sin(self.dihedral_to_radians(labels)), torch.cos(self.dihedral_to_radians(labels))),
                                   dim=2).squeeze(2), mask)
         return loss
 
@@ -403,13 +402,16 @@ class MultiTaskLoss(nn.Module):
 
         return loss.sum()
 
+    @staticmethod
+    def dihedral_to_radians(angle):
+        """ Converts angles to radians
+        Args:
+            angles (1D Tensor): vector with angle values
+        """
+        return angle * np.pi / 180
 
-def dihedral_to_radians(angle):
-    """ Converts angles to radians
-    Args:
-        angles (1D Tensor): vector with angle values
-    """
-    return angle * np.pi / 180
+
+
 
 
 def init_model(initial_channels, hidden_neurons, learning_rate):
@@ -435,7 +437,7 @@ def init_model(initial_channels, hidden_neurons, learning_rate):
 def load_sec_struct_model():
     checkpoint_dir = "/home/share/huadjyin/home/s_sukui/02_data/01_model/protT5/secstruct_checkpoint.pt"
     state = torch.load(checkpoint_dir)
-    model = ConvNet()
+    model = NetsurfConvModel()
     model.load_state_dict(state['state_dict'])
     model = model.eval()
     model = model.to(device)
@@ -485,8 +487,6 @@ def training(epochs, model, criterion, optimizer, dataset):
     validation_loss = []
 
     train, test = dataset
-
-    # scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=1e-2, steps_per_epoch=len(train), epochs=epochs)
 
     for epoch in range(epochs):
         print('Epoch:', epoch + 1, ' of ', epochs)

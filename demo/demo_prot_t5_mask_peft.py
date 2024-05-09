@@ -5,7 +5,7 @@ import os
 
 sys.path.insert(0, "..")
 
-from proteinNER.classifier.model import ProtTransT5MaskPEFTModel, ProtTransT5MaskPretrainModel
+from proteinNER.classifier.model import ProtTransT5MaskPEFTModel
 from proteinNER.classifier.trainer import ProteinMaskTrainer
 
 
@@ -14,13 +14,13 @@ def register_parameters():
     parser.add_argument(
         '--train_data_path',
         type=str,
-        default='/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/03_datasets/train.txt',
+        default='/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/03_datasets/full_rep_seq.true_orf/chunk100w/train.txt',
         help='the path of input dataset'
     )
     parser.add_argument(
         '--test_data_path',
         type=str,
-        default='/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/03_datasets/test.txt',
+        default='/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/03_datasets/full_rep_seq.true_orf/chunk100w/test.txt',
         help='the path of input dataset'
     )
     parser.add_argument(
@@ -66,8 +66,8 @@ def register_parameters():
 
 
 def worker():
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-    os.environ["WANDB_MODE"] = "offline"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
+    # os.environ["WANDB_MODE"] = "offline"
     args = register_parameters()
 
     # prepare dataset

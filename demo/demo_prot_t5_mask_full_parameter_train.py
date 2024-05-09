@@ -42,7 +42,7 @@ def register_parameters():
     parser.add_argument('--inference_length_threshold', type=int, default=50,
                         help='inference domain length threshold')  # 50
     parser.add_argument('--seed', type=int, default=42, help='random seed')
-    parser.add_argument('--batch_size', type=int, default=2, help='batch size')
+    parser.add_argument('--batch_size', type=int, default=1, help='batch size')
     parser.add_argument('--num_classes', type=int, default=28,
                         help='the number of categories')  # PFAM: 20794, GENE3D: 6595
     parser.add_argument('--add_background', action='store_true', help='add background type to the final categories')
