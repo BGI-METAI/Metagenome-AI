@@ -29,7 +29,7 @@ def process_line(line, save_path):
     # protein_id, #1, #2, #3, #4, partial, start_type, rbs_motif, rbs_spacer, gc_count, sequence
     # protein_id, _, _, _, _, partial, _, _, _, gc_count, seq = line.strip().split(' ')
     values = []
-    for value in line.strip().split(' '):
+    for value in line.strip().split(','):
         if value.strip():
             values.append(value.strip())
     protein_id, seq, partial, gc_count = values[0], values[-1], values[5], values[9]

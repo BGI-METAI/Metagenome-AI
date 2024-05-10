@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Input and base output path
-input_file="/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/03_datasets/chunks/test.fasta"
-output_dir="/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/03_datasets/chunks"
+input_file="/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/01_origin/non_anno/full_rep_seq.true_orf.fasta"
+output_dir="/home/share/huadjyin/home/s_sukui/02_data/05_meta/sz_4d/03_datasets/chunks/full_rep_seq.true_orf/chunk100w"
 num=1000000  # Number of records per file
 
 # Create output directory if it doesn't exist
