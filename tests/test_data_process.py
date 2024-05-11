@@ -3,6 +3,8 @@ import pickle
 import random
 import unittest
 
+import numpy as np
+
 random.seed(42)
 
 
@@ -71,3 +73,64 @@ class TestDataProcess(unittest.TestCase):
                     print(f"{sample} was error: {e}")
         df = pd.DataFrame({"name": names, "lens": lens})
         df.to_csv(os.path.join(save_dir, "test_analysis.csv"))
+
+    def test_static_dis_with_len(self):
+        # 获取含有不同蛋白的pfam的对应蛋白，用于做embedding可视化
+        """
+        pfam, protein_num, protein_name, protein_seq
+
+        :return:
+        """
+        pfam_nums = [i for i in range(100, 20000, 2000)]
+        cal_values = [-1 for _ in range(10)]
+        cal_name = ["" for _ in range(10)]
+        protein_names_all =[[] for _ in range(10)]
+        protein_seq_all = [[] for _ in range(10)]
+        thread = 500
+        pfam_statistic_path = "/home/share/huadjyin/home/yinpeng/zkx/data/interpro/interpro_result/pFAM_info_out.txt"
+        pfam_protein_family_path = "/home/share/huadjyin/home/yinpeng/zkx/data/interpro/interpro_result/pFAM_info_out.txt"
+        pfam_protein_seq_path = "/home/share/huadjyin/home/yinpeng/zkx/data/interpro/interpro_result/pFAM_info_out.txt"
+
+        print(len(pfam_nums))
+
+        def find_nearest(array, value):
+            array = np.asarray(array)
+            idx = (np.abs(array - value)).argmin()
+            return array[idx], idx
+
+        # 获取对应的pfam label
+        with open(pfam_statistic_path, "r") as f:
+            for pf_value in f.readlines():
+                name, value = pf_value.split(" ")
+                name = name.strip()
+                value = int(value.strip())
+                near_value, idx = find_nearest(pfam_nums, value)
+                offset = abs(near_value - value)
+                if offset < thread and abs(cal_values[idx] - value) > offset:
+                    cal_values[idx] = value
+                    cal_name[idx] = name
+
+                if -1 not in cal_values:
+                    break
+
+        # 获取对应的protein name
+        with open(pfam_protein_family_path, "r") as f:
+            for pf_value in f.readlines():
+                values = [name.strip() for name in pf_value.split(" ")]
+                family_name = values[0]
+                protein_names = values[1:]
+                if family_name in cal_name:
+                    protein_names_all.append(protein_names)
+
+        # 获取对应的seq
+        with open(pfam_protein_seq_path, "r") as f:
+            for pf_value in f.readlines():
+                values = [name.strip() for name in pf_value.split(" ")]
+                protein_name = values[0]
+                protein_seq = values[2]
+                for i in range(len(protein_names_all)):
+                    if protein_name in protein_names_all[i]:
+                        protein_seq_all[i].append(protein_seq)
+
+        for name, value in zip(cal_name, cal_values):
+            print(f"name: {name} -> nums: {value}")
