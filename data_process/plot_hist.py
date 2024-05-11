@@ -4,6 +4,7 @@ import os.path
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 def register_parameters():
     parser = argparse.ArgumentParser(description='Statistics the sequence length distribution of the specified column')
     parser.add_argument(
@@ -42,11 +43,21 @@ def register_parameters():
         default=",",
         help='separator'
     )
+    parser.add_argument(
+        '--cut_off',
+        action='store_true',
+        help='the value of max len is truncated'
+    )
+    parser.add_argument(
+        '--cal_len',
+        action='store_true',
+        help='the value of max len is truncated'
+    )
     return parser.parse_args()
 
 
 def get_seq_distribution(file_path: str, col_name: str = None, col_idx: int = 0, max_len: int = np.inf,
-                         separator: str = ","):
+                         separator: str = ",", cut_off: bool = True, cal_len: bool = False):
     """
     get seq distribution
     :param file_path: 文件路径
@@ -72,10 +83,16 @@ def get_seq_distribution(file_path: str, col_name: str = None, col_idx: int = 0,
             assert col_idx <= len(first_line), f"{col_idx} out of max column ({len(first_line)} "
             print(f"statistic value: {first_line[col_idx]}")
 
+        print(f"first line: {first_line}")
         for line in lines:
-            value = int(line.split(separator)[col_idx].strip())
+            str_value = line.split(separator)[col_idx].strip()
+            if cal_len:
+                str_value = len(str_value)
+            value = int(str_value)
             if value > max_len:
                 unnormal_length_list.append(value)
+                if cut_off:
+                    normal_length_list.append(max_len)
             else:
                 normal_length_list.append(value)
     print("out of length list nums: ", len(unnormal_length_list))
