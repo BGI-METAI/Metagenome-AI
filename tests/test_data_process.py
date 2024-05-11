@@ -88,8 +88,8 @@ class TestDataProcess(unittest.TestCase):
         protein_seq_all = [[] for _ in range(10)]
         thread = 500
         pfam_statistic_path = "/home/share/huadjyin/home/yinpeng/zkx/data/interpro/interpro_result/pFAM_info_out.txt"
-        pfam_protein_family_path = "/home/share/huadjyin/home/yinpeng/zkx/data/interpro/interpro_result/pFAM_info_out.txt"
-        pfam_protein_seq_path = "/home/share/huadjyin/home/yinpeng/zkx/data/interpro/interpro_result/pFAM_info_out.txt"
+        pfam_protein_family_path = "/home/share/huadjyin/home/yinpeng/zkx/data/interpro/interpro_result/seq_PFAM_protein.txt"
+        pfam_protein_seq_path = "/home/share/huadjyin/home/yinpeng/zkx/data/interpro/interpro_result/protein_seq_PFAM.tsv"
 
         print(len(pfam_nums))
 
