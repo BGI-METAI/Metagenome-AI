@@ -226,6 +226,39 @@ def train_model_test(rank, world_size):
     # print(f'Process {dist.get_rank()}: {own.item()} -> {gathered_tensor}')
     pass
 
+def store_embeddings(rank, config, world_size):
+    try:
+        ddp_setup(rank, world_size)
+        device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
+        Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
+
+        train_dataloader, val_ds, test_ds, le = get_datasets(config)
+
+
+        llm = choose_llm(config)
+        llm.to(device)
+
+        if rank == 0:
+            timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+            logger = init_logger(timestamp)
+            init_wandb(config["model_folder"], llm, timestamp)
+
+        # To wait for wandb to get initialized
+        dist.barrier()
+
+        # Code to calculate embeddings and store them
+        try:
+            llm.eval()
+            with torch.no_grad():
+                res2 = llm(batch_tokens_gpu64)
+        except RuntimeError as e:
+            print(str(e))
+            if 'out of memory' in str(e):
+                torch.cuda.empty_cache()
+                print("Cuda out of mem pff")
+        # Resource cleanup
+    finally:
+        destroy_process_group()
 
 def train_classifier(rank, config, world_size):
     """Classifier training based on LLM embeddings
