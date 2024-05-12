@@ -474,7 +474,7 @@ def train_classifier(rank, config, world_size):
 
 if __name__ == "__main__":
     warnings.filterwarnings("ignore")
-    config = ConfigProviderFactory.get_config_provider("ESM")
+    config = ConfigProviderFactory.get_config_provider("ESM").get_config()
     world_size = torch.cuda.device_count()
     # world_size = 2
     mp.spawn(train_classifier, args=(config, world_size), nprocs=world_size)
