@@ -20,13 +20,13 @@ class JSONConfigProvider:
 
 class ESMConfigProvider(JSONConfigProvider):
     def get_config(self):
-        with open("configs/config_esm.json") as file:
+        with open("framework/configs/config_esm.json") as file:
             return json.load(file)
 
 
 class ProteinTransConfigProvider(JSONConfigProvider):
     def get_config(self):
-        with open("config/config_protein_trans.json") as file:
+        with open("framework/config/config_protein_trans.json") as file:
             return json.load(file)
 
 
