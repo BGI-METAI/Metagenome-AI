@@ -43,35 +43,74 @@ class EsmEmbedding(Embedding):
         _, _, batch_tokens = self.batch_converter(data)
         batch_tokens = batch_tokens.to(self.device)
         with torch.no_grad():
-            res = self.model(batch_tokens)
+            esm_result = self.model(batch_tokens)
 
         # The first token of every sequence is always a special classification token ([CLS]).
         # The final hidden state corresponding to this token is used as the aggregate sequence representation
         # for classification tasks.
-        if self.pooling == "cls":
-            seq_repr = res["logits"][:, 0, :]
-        elif self.pooling == "mean":
-            seq_repr = []
-            batch_lens = (batch_tokens != self.alphabet.padding_idx).sum(1)
-
-            for i, tokens_len in enumerate(batch_lens):
-                seq_repr.append(res["logits"][i, 1 : tokens_len - 1].mean(0))
-
-            seq_repr = torch.vstack(seq_repr)
-        elif self.pooling == "max":
-            seq_repr = []
-            batch_lens = (batch_tokens != self.alphabet.padding_idx).sum(1)
-
-            for i, tokens_len in enumerate(batch_lens):
-                seq_repr.append(res["logits"][i, 1 : tokens_len - 1].max(0))
-
-            seq_repr = torch.vstack(seq_repr)
-        else:
-            raise NotImplementedError()
-        return seq_repr
+        return self._pooling(self.pooling, esm_result["logits"], batch_tokens)
 
     def to(self, device):
         self.model = self.model.to(device)
 
     def get_embedding_dim(self):
         return self.model.embed_dim
+
+    def _pooling(self, strategy, tensors, batch_tokens):
+        """Perform pooling on [batch_size, seq_len, emb_dim] tensor
+
+        Args:
+            strategy: One of the values ["mean", "max", "cls"]
+        """
+        if strategy == "cls":
+            seq_repr = tensors[:, 0, :]
+        elif strategy == "mean":
+            seq_repr = []
+            batch_lens = (batch_tokens != self.alphabet.padding_idx).sum(1)
+
+            for i, tokens_len in enumerate(batch_lens):
+                seq_repr.append(tensors[i, 1 : tokens_len - 1].mean(0))
+
+            seq_repr = torch.vstack(seq_repr)
+        elif strategy == "max":
+            seq_repr = []
+            batch_lens = (batch_tokens != self.alphabet.padding_idx).sum(1)
+
+            for i, tokens_len in enumerate(batch_lens):
+                seq_repr.append(tensors[i, 1 : tokens_len - 1].max(0))
+
+            seq_repr = torch.vstack(seq_repr)
+        else:
+            raise NotImplementedError("This type of pooling is not supported")
+        return seq_repr
+
+    def store_embeddings(self, batch):
+        """Store each protein embedding in a separate file named [protein_id].pkl
+
+        Save all types of poolings such that each file has a [3, emb_dim]
+        where rows 0, 1, 2 are mean, max, cls pooled respectively
+
+        Args:
+            batch: Each sample contains protein_id and sequence
+        """
+        data = [
+            (protein_id, seq)
+            for protein_id, seq in zip(batch["protein_id"], batch["sequence"])
+        ]
+        batch_labels, _, batch_tokens = self.batch_converter(data)
+        batch_tokens = batch_tokens.to(self.device)
+        with torch.no_grad():
+            esm_result = self.model(batch_tokens).detach().cpu()
+
+        mean_max_cls_embeddings = []
+        mean_embeddings = self._pooling("mean", esm_result["logits"], batch_tokens)
+        max_embeddings = self._pooling("max", esm_result["logits"], batch_tokens)
+        cls_embeddings = self._pooling("cls", esm_result["logits"], batch_tokens)
+
+        # actually easier to create a .pkl dict with keys mean, max, cls, seq, labels, seq_len
+        # TODO change this and do save by the protein ID
+        for protein_id, mean_emb, max_emb, cls_emb in zip(batch_labels, mean_embeddings, max_embeddings, cls_embeddings):
+            embeddings = torch.vstack([mean_embeddings, max_embeddings, cls_embeddings])
+
+
+

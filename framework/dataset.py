@@ -35,3 +35,5 @@ class CustomDataset(Dataset):
             "target": seq_label_pair["le_" + self.label],
         }
         return sample
+    
+# TODO take chunk00 and create .pkl files for each via store_embeddings
