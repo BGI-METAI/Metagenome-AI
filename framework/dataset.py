@@ -9,6 +9,7 @@
 @Desc    :   None
 """
 
+import csv
 import torch
 from torch.utils.data import Dataset
 
@@ -35,5 +36,18 @@ class CustomDataset(Dataset):
             "target": seq_label_pair["le_" + self.label],
         }
         return sample
-    
+
+
 # TODO take chunk00 and create .pkl files for each via store_embeddings
+class TSVDataset(Dataset):
+    def __init__(self, path):
+        with open(path) as file:
+            reader = csv.reader(file, delimiter=" ", quotechar='"')
+            self.samples = list(reader)
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        sample = self.samples[idx]
+        return {"protein_id": sample[0], "len": sample[1], "sequence": sample[2]}

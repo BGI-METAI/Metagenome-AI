@@ -12,6 +12,8 @@
 import esm
 import torch
 from torch.nn import Identity
+import pickle
+import pathlib
 
 from embedding import Embedding
 
@@ -20,8 +22,8 @@ class EsmEmbedding(Embedding):
     def __init__(self, pooling="mean"):
         # model, alphabet = esm.pretrained.esm2_t36_3B_UR50D()
         # model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
-        # model, alphabet = esm.pretrained.esm2_t12_35M_UR50D()
-        model, alphabet = esm.pretrained.esm2_t30_150M_UR50D()
+        model, alphabet = esm.pretrained.esm2_t12_35M_UR50D()
+        # model, alphabet = esm.pretrained.esm2_t30_150M_UR50D()
         self.model = model
         self.alphabet = alphabet
         self.model.contact_head = Identity()
@@ -77,14 +79,14 @@ class EsmEmbedding(Embedding):
             batch_lens = (batch_tokens != self.alphabet.padding_idx).sum(1)
 
             for i, tokens_len in enumerate(batch_lens):
-                seq_repr.append(tensors[i, 1 : tokens_len - 1].max(0))
+                seq_repr.append(tensors[i, 1 : tokens_len - 1].max(0)[0])
 
             seq_repr = torch.vstack(seq_repr)
         else:
             raise NotImplementedError("This type of pooling is not supported")
         return seq_repr
 
-    def store_embeddings(self, batch):
+    def store_embeddings(self, batch, out_dir):
         """Store each protein embedding in a separate file named [protein_id].pkl
 
         Save all types of poolings such that each file has a [3, emb_dim]
@@ -93,6 +95,7 @@ class EsmEmbedding(Embedding):
         Args:
             batch: Each sample contains protein_id and sequence
         """
+        pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
         data = [
             (protein_id, seq)
             for protein_id, seq in zip(batch["protein_id"], batch["sequence"])
@@ -100,17 +103,17 @@ class EsmEmbedding(Embedding):
         batch_labels, _, batch_tokens = self.batch_converter(data)
         batch_tokens = batch_tokens.to(self.device)
         with torch.no_grad():
-            esm_result = self.model(batch_tokens).detach().cpu()
+            esm_result = self.model(batch_tokens)
 
+        esm_result = esm_result["logits"].detach().cpu()
         mean_max_cls_embeddings = []
-        mean_embeddings = self._pooling("mean", esm_result["logits"], batch_tokens)
-        max_embeddings = self._pooling("max", esm_result["logits"], batch_tokens)
-        cls_embeddings = self._pooling("cls", esm_result["logits"], batch_tokens)
+        mean_embeddings = self._pooling("mean", esm_result, batch_tokens)
+        max_embeddings = self._pooling("max", esm_result, batch_tokens)
+        cls_embeddings = self._pooling("cls", esm_result, batch_tokens)
 
-        # actually easier to create a .pkl dict with keys mean, max, cls, seq, labels, seq_len
-        # TODO change this and do save by the protein ID
-        for protein_id, mean_emb, max_emb, cls_emb in zip(batch_labels, mean_embeddings, max_embeddings, cls_embeddings):
-            embeddings = torch.vstack([mean_embeddings, max_embeddings, cls_embeddings])
-
-
-
+        for protein_id, mean_emb, max_emb, cls_emb in zip(
+            batch_labels, mean_embeddings, max_embeddings, cls_embeddings
+        ):
+            embeddings_dict = {"mean": mean_emb, "max": max_emb, "cls": cls_emb}
+            with open(f"{out_dir}/{protein_id}.pkl", "wb") as file:
+                pickle.dump(embeddings_dict, file)

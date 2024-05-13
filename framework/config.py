@@ -26,7 +26,13 @@ class ESMConfigProvider(JSONConfigProvider):
 
 class ProteinTransConfigProvider(JSONConfigProvider):
     def get_config(self):
-        with open("framework/config/config_protein_trans.json") as file:
+        with open("framework/configs/config_protein_trans.json") as file:
+            return json.load(file)
+
+
+class ESMInferConfigProvider(JSONConfigProvider):
+    def get_config(self):
+        with open("framework/configs/config_esm_infer.json") as file:
             return json.load(file)
 
 
@@ -37,6 +43,8 @@ class ConfigProviderFactory:
             return ESMConfigProvider()
         elif config_type == "PTRANS":
             return ProteinTransConfigProvider()
+        elif config_type == "ESM_infer":
+            return ESMInferConfigProvider()
         else:
             raise NotImplementedError("This type of config is not supported")
 
