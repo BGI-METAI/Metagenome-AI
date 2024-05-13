@@ -8,7 +8,7 @@
 @Contact :   nikolamilicevic@genomics.cn
 @Desc    :   None
 """
-
+import argparse
 import datetime
 import logging
 import warnings
@@ -40,6 +40,7 @@ from embedding_esm import EsmEmbedding
 from embedding_protein_trans import ProteinTransEmbedding
 from dataset import CustomDataset, TSVDataset
 from config import get_weights_file_path, ConfigProviderFactory
+from utils import check_gpu_used_memory
 
 
 def init_logger(timestamp):
@@ -250,9 +251,8 @@ def store_embeddings(rank, config, world_size):
             logger = init_logger(timestamp)
             init_wandb(config["model_folder"], timestamp)
 
-        # To wait for wandb to get initialized
         dist.barrier()
-        # Code to calculate embeddings and store them
+
         for batch in dataloader:
             try:
                 with torch.no_grad():
@@ -264,7 +264,7 @@ def store_embeddings(rank, config, world_size):
                     )
                     logger.error(batch["protein_id"])
                     torch.cuda.empty_cache()
-                    print("Cuda out of mem")
+                    print("Cuda was out of memory, recovering...")
         # Resource cleanup
     finally:
         destroy_process_group()
@@ -516,9 +516,25 @@ def train_classifier(rank, config, world_size):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Module that contains training and evaluation. Will be separated."
+    )
+    parser.add_argument(
+        "-e", "--emb_type", help="Type of embedding to be used", type=str, required=True
+    )
+    parser.add_argument(
+        "-w",
+        "--wandb_key",
+        help="Wandb API key. If not supplied it is expected that you are already logged in on your machine",
+        type=str,
+        required=False,
+        default=None,
+    )
+    args = parser.parse_args()
+    if args.wandb_key:
+        wandb.login(key=args.wandb_key)
     warnings.filterwarnings("ignore")
-    config = ConfigProviderFactory.get_config_provider("ESM_infer").get_config()
+    config = ConfigProviderFactory.get_config_provider(args.emb_type).get_config()
     world_size = torch.cuda.device_count()
-    # world_size = 2
     # mp.spawn(train_classifier, args=(config, world_size), nprocs=world_size)
     mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)

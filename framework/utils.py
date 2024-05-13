@@ -10,6 +10,8 @@
 @Desc    :   Utility functions, mainly ones used for memory consumption debugging
 """
 import torch
+import subprocess as sp
+import os
 
 
 def torch_gpu_mem_info(device=None):
@@ -54,3 +56,11 @@ def get_tensor_size_mb(t):
 
 def is_model_on_gpu(model):
     print(f"Model is on GPU: {next(model.parameters()).is_cuda}")
+
+
+def check_gpu_used_memory():
+    command = "nvidia-smi --query-gpu=memory.used --format=csv"
+    memory_used_info = (
+        sp.check_output(command.split()).decode("ascii").split("\n")[:-1][1:]
+    )
+    print("[GPUs]: ", memory_used_info)
