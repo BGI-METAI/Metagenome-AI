@@ -38,7 +38,7 @@ import torch.distributed as dist
 
 from embedding_esm import EsmEmbedding
 from embedding_protein_trans import ProteinTransEmbedding
-from dataset import CustomDataset
+from dataset import CustomDataset, TSVDataset
 from config import get_weights_file_path, ConfigProviderFactory
 
 
@@ -51,7 +51,7 @@ def init_logger(timestamp):
     return logging.getLogger(__name__)
 
 
-def init_wandb(model_folder, model, timestamp):
+def init_wandb(model_folder, timestamp, model=None):
     # initialize wandb tracker
     wandb_output_dir = os.path.join(model_folder, "wandb_home")
     Path(wandb_output_dir).mkdir(parents=True, exist_ok=True)
@@ -64,7 +64,8 @@ def init_wandb(model_folder, model, timestamp):
         job_type="training",
         reinit=True,
     )
-    wandb.watch(model, log="all")
+    if model:
+        wandb.watch(model, log="all")
 
 
 # Initialize the PyTorch distributed backend
@@ -226,14 +227,20 @@ def train_model_test(rank, world_size):
     # print(f'Process {dist.get_rank()}: {own.item()} -> {gathered_tensor}')
     pass
 
+
 def store_embeddings(rank, config, world_size):
     try:
         ddp_setup(rank, world_size)
         device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
         Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
 
-        train_dataloader, val_ds, test_ds, le = get_datasets(config)
-
+        ds = TSVDataset(config["path"])
+        dataloader = data.DataLoader(
+            ds,
+            batch_size=config["batch_size"],
+            shuffle=False,
+            sampler=DistributedSampler(ds),
+        )
 
         llm = choose_llm(config)
         llm.to(device)
@@ -241,24 +248,27 @@ def store_embeddings(rank, config, world_size):
         if rank == 0:
             timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
             logger = init_logger(timestamp)
-            init_wandb(config["model_folder"], llm, timestamp)
+            init_wandb(config["model_folder"], timestamp)
 
         # To wait for wandb to get initialized
         dist.barrier()
-
         # Code to calculate embeddings and store them
-        try:
-            llm.eval()
-            with torch.no_grad():
-                res2 = llm(batch_tokens_gpu64)
-        except RuntimeError as e:
-            print(str(e))
-            if 'out of memory' in str(e):
-                torch.cuda.empty_cache()
-                print("Cuda out of mem pff")
+        for batch in dataloader:
+            try:
+                with torch.no_grad():
+                    llm.store_embeddings(batch, config["out_dir"])
+            except RuntimeError as e:
+                if "out of memory" in str(e):
+                    logger.error(
+                        "[REPROCESS] Cuda run out of mem, logging IDs that need to be re-processed"
+                    )
+                    logger.error(batch["protein_id"])
+                    torch.cuda.empty_cache()
+                    print("Cuda out of mem")
         # Resource cleanup
     finally:
         destroy_process_group()
+
 
 def train_classifier(rank, config, world_size):
     """Classifier training based on LLM embeddings
@@ -507,7 +517,8 @@ def train_classifier(rank, config, world_size):
 
 if __name__ == "__main__":
     warnings.filterwarnings("ignore")
-    config = ConfigProviderFactory.get_config_provider("ESM").get_config()
+    config = ConfigProviderFactory.get_config_provider("ESM_infer").get_config()
     world_size = torch.cuda.device_count()
     # world_size = 2
-    mp.spawn(train_classifier, args=(config, world_size), nprocs=world_size)
+    # mp.spawn(train_classifier, args=(config, world_size), nprocs=world_size)
+    mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
