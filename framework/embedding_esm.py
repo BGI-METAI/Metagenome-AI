@@ -21,8 +21,8 @@ from embedding import Embedding
 class EsmEmbedding(Embedding):
     def __init__(self, pooling="mean"):
         # model, alphabet = esm.pretrained.esm2_t36_3B_UR50D()
-        # model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
-        model, alphabet = esm.pretrained.esm2_t12_35M_UR50D()
+        model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
+        # model, alphabet = esm.pretrained.esm2_t12_35M_UR50D()
         # model, alphabet = esm.pretrained.esm2_t30_150M_UR50D()
         self.model = model
         self.alphabet = alphabet
@@ -114,6 +114,10 @@ class EsmEmbedding(Embedding):
         for protein_id, mean_emb, max_emb, cls_emb in zip(
             batch_labels, mean_embeddings, max_embeddings, cls_embeddings
         ):
-            embeddings_dict = {"mean": mean_emb, "max": max_emb, "cls": cls_emb}
+            embeddings_dict = {
+                "mean": mean_emb.numpy(),
+                "max": max_emb.numpy(),
+                "cls": cls_emb.numpy(),
+            }
             with open(f"{out_dir}/{protein_id}.pkl", "wb") as file:
                 pickle.dump(embeddings_dict, file)
