@@ -38,6 +38,7 @@ import torch.distributed as dist
 
 from embedding import EsmEmbedding
 from embedding_protein_trans import ProteinTransEmbedding
+from embedding_protein_vec import ProteinVecEmbedding
 from dataset import CustomDataset
 from config import get_config, get_weights_file_path
 
@@ -180,8 +181,10 @@ def choose_llm(config):
     """
     if config["emb_type"] == "ESM":
         return EsmEmbedding()
-    if config["emb_type"] == "PTRANS":
+    elif config["emb_type"] == "PTRANS":
         return ProteinTransEmbedding(model_name=config["prot_trans_model_name"])
+    elif config["emb_type"] == "PVEC":
+        return ProteinVecEmbedding()
     else:
         raise NotImplementedError("This type of embedding is not supported")
 
@@ -464,7 +467,6 @@ def train_classifier(rank, config, world_size):
 if __name__ == "__main__":
     warnings.filterwarnings("ignore")
     config = get_config()
-    # world_size = torch.cuda.device_count()
-    world_size = 1
+    world_size = torch.cuda.device_count()  # Number of GPUs to use
     mp.spawn(train_classifier, args=(config, world_size), nprocs=world_size)
     # train_model(config)
