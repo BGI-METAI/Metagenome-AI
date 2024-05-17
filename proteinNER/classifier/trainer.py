@@ -6,34 +6,34 @@
 # @Email   : zhangchao5@genomics.cn
 import torch
 import numpy as np
-import pickle
-import time
 
 from tqdm import tqdm
 from datetime import datetime
 
 from proteinNER.base_module import BaseTrainer
 from proteinNER.base_module.utils import EarlyStopper
-from proteinNER.classifier.loss_fn import ProteinLoss
+
+CKPT_SAVE_STEP = 10
 
 
-class ProteinNERTrainer(BaseTrainer):
+class ProteinAANERTrainer(BaseTrainer):
     def __init__(self, **kwargs):
-        super(ProteinNERTrainer, self).__init__(**kwargs)
+        super(ProteinAANERTrainer, self).__init__(**kwargs)
 
     def train(self, **kwargs):
         self.loss_weight = kwargs.get('loss_weight', 1.)
 
         early_stopper = EarlyStopper(patience=kwargs.get('patience', 4))
         self.register_wandb(
-            user_name=kwargs.get('username', 'kxzhang2000'),
-            project_name=kwargs.get('project', 'Pro_func'),
-            group=kwargs.get('group', 'NER_V2')
+            user_name=kwargs.get('username'),
+            project_name=kwargs.get('project'),
+            group=kwargs.get('group')
         )
 
-        self.model, self.optimizer, self.train_loader, self.test_loader, self.lr_scheduler = self.accelerator.prepare(
-            self.model, self.optimizer, self.train_loader, self.test_loader, self.lr_scheduler
-        )
+        self.model = self.accelerator.prepare_model(self.model)
+        self.optimizer = self.accelerator.prepare_optimizer(self.optimizer)
+        self.train_loader = self.accelerator.prepare_data_loader(self.train_loader)
+        self.lr_scheduler = self.accelerator.prepare_scheduler(self.lr_scheduler)
 
         for eph in range(kwargs.get('epoch', 100)):
             self.model.train()
@@ -43,15 +43,8 @@ class ProteinNERTrainer(BaseTrainer):
             for idx, sample in enumerate(batch_iterator):
                 input_ids, attention_mask, batch_label = sample
                 with self.accelerator.accumulate(self.model):
-                    logist = self.model(input_ids, attention_mask)
                     with self.accelerator.autocast():
-                        loss = ProteinLoss.focal_loss(
-                            pred=logist.permute(0, 2, 1),
-                            target=batch_label,
-                            weight=self.loss_weight,
-                            gamma=2.
-                        )
-
+                        loss = self.model(input_ids, attention_mask, batch_label.long())
                     self.accelerator.backward(loss)
                     self.optimizer.step()
                     self.optimizer.zero_grad()
@@ -59,7 +52,7 @@ class ProteinNERTrainer(BaseTrainer):
                 batch_iterator.set_postfix({'Loss': f'{loss.item():.4f}'})
                 self.accelerator.log({'loss': loss.item()})
                 eph_loss.append(loss.item())
-                if self.save_in_batch and idx % 500 == 0:
+                if self.save_in_batch and idx % CKPT_SAVE_STEP == 0:
                     self.save_ckpt('batch')
 
                 with self.accelerator.main_process_first():
@@ -179,75 +172,5 @@ class ProteinNERTrainer(BaseTrainer):
 
     @torch.no_grad()
     def inference(self, **kwargs):
-        label_dict_path = kwargs.get('label_dict_path', '.')
-        output_home = kwargs.get('output_home', '.')
-        length_threshold = kwargs.get('inference_length_threshold', 50)
+        raise NotImplementedError
 
-        self.load_ckpt(mode='best')
-        self.model, self.test_loader = self.accelerator.prepare(self.model, self.test_loader)
-        self.model.eval()
-
-        file_name = 0
-        batch_iterator = tqdm(self.test_loader, desc=f'Pid: {self.accelerator.process_index}')
-        for idx, sample in enumerate(batch_iterator):
-            t1 = time.time()
-            file_name += 1
-            input_ids, attention_mask, batch_label = sample
-            logist = self.model(input_ids, attention_mask)
-            pred = torch.nn.functional.softmax(logist, dim=-1).argmax(-1)
-
-            index_list = torch.nonzero(pred != 0, as_tuple=False)
-            if index_list.size()[0] != 0:
-                nonzero_label = pred[index_list[:, 0], index_list[:, 1]]
-
-                diff_indices = torch.nonzero(nonzero_label[1:] != nonzero_label[:-1]).squeeze()
-                diff_indices = torch.cat([diff_indices, torch.tensor([len(nonzero_label) - 1]).cuda()])
-
-                diff_mask = index_list[:, 1][1:] - index_list[:, 1][:-1]
-                single_indices = torch.nonzero(diff_mask < 0, as_tuple=True)[0]
-                diff_indices = torch.cat((diff_indices, single_indices)).unique().sort()[0]
-                diff_indices = torch.cat([torch.tensor([0]).cuda(), diff_indices])
-
-                batch_location_list = []
-                batch_label_name_list = []
-                location_list = []
-                label_name_list = []
-
-                for i in range(len(diff_indices)):
-                    if diff_indices[i] in single_indices:
-                        batch_location_list.append(location_list) if len(location_list) != 0 else None
-                        batch_label_name_list.append(label_name_list) if len(label_name_list) != 0 else None
-                        location_list = []
-                        label_name_list = []
-
-                    if i == 0:
-                        start_position = index_list[:, 1][diff_indices[i]].item()
-                        end_position = index_list[:, 1][diff_indices[i + 1]].item()
-                        if (end_position - start_position) + 1 >= length_threshold:
-                            location_list.append([start_position, end_position])
-                            label_name = self.convert_label(label_dict_path, nonzero_label[diff_indices[i] + 1])
-                            label_name_list.append(label_name)
-                    elif i < len(diff_indices) - 1:
-                        start_position = index_list[:, 1][diff_indices[i] + 1].item()
-                        end_position = index_list[:, 1][diff_indices[i + 1]].item()
-                        if (end_position - start_position) + 1 >= length_threshold:  # [1,3]位置为1，2，3.因此长度为3-1+1
-                            location_list.append([start_position, end_position])
-                            label_name = self.convert_label(label_dict_path, nonzero_label[diff_indices[i] + 1])
-                            label_name_list.append(label_name)
-                    else:
-                        batch_location_list.append(location_list) if len(location_list) != 0 else None
-                        batch_label_name_list.append(label_name_list) if len(label_name_list) != 0 else None
-                with open(output_home + '/result/inference_protein_location_label_batch' + str(file_name) + '.txt', 'w') as f:
-                    f.write('Sequence' + '\t' + 'Location([start, end])' + '\t' + 'Predicted_label' + '\n')
-                    for j in range(len(batch_label_name_list)):
-                        f.write(
-                            'ABC...' + '\t' + str(batch_location_list[j]) + '\t' + str(batch_label_name_list[j]) + '\n')
-            t2 = time.time()
-            print("each batch time", round(t2 - t1, 5), 'seconds')
-
-    @staticmethod
-    def convert_label(label_dict_path, label_id):
-        with open(label_dict_path, "rb") as f:
-            label_dict = pickle.load(f)
-        label_name = label_dict[label_id.item()]
-        return label_name
