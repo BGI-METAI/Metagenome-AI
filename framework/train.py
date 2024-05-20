@@ -38,6 +38,7 @@ import torch.distributed as dist
 
 from dataset import CustomDataset, TSVDataset, MaxTokensLoader, LoadStoredDataset
 from config import get_weights_file_path, ConfigProviderFactory
+from utils import check_gpu_used_memory
 
 try:
     from embedding_esm import EsmEmbedding
@@ -267,13 +268,17 @@ def store_embeddings(rank, config, world_size):
         llm.to(device)
 
         if rank == 0:
-            timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
-            logger = init_logger(timestamp)
             init_wandb(config["model_folder"], timestamp)
 
-        dist.barrier()
+        timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+        logger = init_logger(timestamp)
 
+        dist.barrier()
+        mem_use_cnt = 0
         for batch in dataloader:
+            mem_use_cnt += 1
+            if rank == 0 and mem_use_cnt % 50 == 0:
+                check_gpu_used_memory()
             try:
                 with torch.no_grad():
                     llm.store_embeddings(batch, config["out_dir"])
@@ -296,20 +301,15 @@ def train_classifier_from_stored_single_gpu(config):
     ds = LoadStoredDataset(config["path"], config["out_dir"], "mean")
 
     dataloader = data.DataLoader(
-        ds,
-        batch_size=config["batch_size"],
-        shuffle=True,
-        num_workers=3
+        ds, batch_size=config["batch_size"], shuffle=True, num_workers=3
     )
-    
+
     # llm = choose_llm(config)
     # d_model = llm.get_embedding_dim()
 
-    for epoch in range(config['num_epochs']):
+    for epoch in range(config["num_epochs"]):
         for batch in dataloader:
             print(batch)
-
-
 
 
 def train_classifier(rank, config, world_size):
