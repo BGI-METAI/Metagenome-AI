@@ -21,8 +21,8 @@ from embedding import Embedding
 class EsmEmbedding(Embedding):
     def __init__(self, pooling="mean"):
         # model, alphabet = esm.pretrained.esm2_t36_3B_UR50D()
-        model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
-        # model, alphabet = esm.pretrained.esm2_t12_35M_UR50D()
+        # model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
+        model, alphabet = esm.pretrained.esm2_t12_35M_UR50D()
         # model, alphabet = esm.pretrained.esm2_t30_150M_UR50D()
         self.model = model
         self.alphabet = alphabet

@@ -12,6 +12,7 @@
 import csv
 import torch
 from torch.utils.data import Dataset
+from collections import defaultdict
 
 
 class CustomDataset(Dataset):
@@ -38,7 +39,6 @@ class CustomDataset(Dataset):
         return sample
 
 
-# TODO take chunk00 and create .pkl files for each via store_embeddings
 class TSVDataset(Dataset):
     def __init__(self, path):
         with open(path) as file:
@@ -51,3 +51,27 @@ class TSVDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.samples[idx]
         return {"protein_id": sample[0], "len": sample[1], "sequence": sample[2]}
+
+
+class MaxTokensLoader:
+    def __init__(self, dataset, max_tokens, start_ind, chunk_size, drop_last=False):
+        self.dataset = dataset
+        self.max_tokens = max_tokens
+        self.start_ind = start_ind
+        self.chunk_size = chunk_size
+        self.drop_last = drop_last
+
+    def __iter__(self):
+        batch = defaultdict(list)
+        total_tokens = 0
+        for idx in range(self.start_ind, self.start_ind + self.chunk_size):
+            sample = self.dataset[idx]
+            batch["protein_id"].append(sample["protein_id"])
+            batch["sequence"].append(sample["sequence"])
+            total_tokens += int(sample["len"])
+            if total_tokens > self.max_tokens:
+                yield batch
+                batch = defaultdict(list)
+                total_tokens = 0
+        if batch.size(0) > 0 and not self.drop_last:
+            yield batch
