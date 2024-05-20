@@ -13,6 +13,7 @@ import csv
 import torch
 from torch.utils.data import Dataset
 from collections import defaultdict
+import pickle
 
 
 class CustomDataset(Dataset):
@@ -75,3 +76,22 @@ class MaxTokensLoader:
                 total_tokens = 0
         if batch.size(0) > 0 and not self.drop_last:
             yield batch
+
+
+class LoadStoredDataset(Dataset):
+    def __init__(self, path, embeddings_dir, emb_type):
+        with open(path) as file:
+            reader = csv.reader(file, delimiter=" ", quotechar='"')
+            self.samples = list(reader)
+        self.embeddings_dir = embeddings_dir
+        self.emb_type = emb_type
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        sample = self.samples[idx]
+        prot_id = sample[0]
+        with open(f"{self.embeddings_dir}/{prot_id}.pkl", "rb") as file_emb:
+            prot_emb = pickle.load(file_emb)
+        return prot_emb[self.emb_type]

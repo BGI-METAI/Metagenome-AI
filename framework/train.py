@@ -36,12 +36,21 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.distributed import init_process_group, destroy_process_group
 import torch.distributed as dist
 
-from embedding_esm import EsmEmbedding
-from embedding_protein_trans import ProteinTransEmbedding
-from embedding_protein_vec import ProteinVecEmbedding
-from dataset import CustomDataset, TSVDataset, MaxTokensLoader
+from dataset import CustomDataset, TSVDataset, MaxTokensLoader, LoadStoredDataset
 from config import get_weights_file_path, ConfigProviderFactory
-from utils import check_gpu_used_memory
+
+try:
+    from embedding_esm import EsmEmbedding
+except ImportError:
+    print("You are missing some of the libraries for ESM")
+try:
+    from embedding_protein_trans import ProteinTransEmbedding
+except ImportError:
+    print("You are missing some of the libraries for ProteinTrans")
+try:
+    from embedding_protein_vec import ProteinVecEmbedding
+except ImportError:
+    print("You are missing some of the libraries for ProteinVec")
 
 
 def init_logger(timestamp):
@@ -279,6 +288,28 @@ def store_embeddings(rank, config, world_size):
         # Resource cleanup
     finally:
         destroy_process_group()
+
+
+def train_classifier_from_stored_single_gpu(config):
+    device = torch.device(f"cuda" if torch.cuda.is_available() else "cpu")
+    Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
+    ds = LoadStoredDataset(config["path"], config["out_dir"], "mean")
+
+    dataloader = data.DataLoader(
+        ds,
+        batch_size=config["batch_size"],
+        shuffle=True,
+        num_workers=3
+    )
+    
+    # llm = choose_llm(config)
+    # d_model = llm.get_embedding_dim()
+
+    for epoch in range(config['num_epochs']):
+        for batch in dataloader:
+            print(batch)
+
+
 
 
 def train_classifier(rank, config, world_size):
@@ -550,5 +581,6 @@ if __name__ == "__main__":
     warnings.filterwarnings("ignore")
     config = ConfigProviderFactory.get_config_provider(args.emb_type).get_config()
     world_size = torch.cuda.device_count()
-    mp.spawn(train_classifier, args=(config, world_size), nprocs=world_size)
+    # mp.spawn(train_classifier, args=(config, world_size), nprocs=world_size)
     # mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
+    train_classifier_from_stored_single_gpu(config)
