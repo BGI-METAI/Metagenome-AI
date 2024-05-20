@@ -38,7 +38,7 @@ import torch.distributed as dist
 
 from embedding_esm import EsmEmbedding
 from embedding_protein_trans import ProteinTransEmbedding
-from dataset import CustomDataset, TSVDataset
+from dataset import CustomDataset, TSVDataset, MaxTokensLoader
 from config import get_weights_file_path, ConfigProviderFactory
 from utils import check_gpu_used_memory
 
@@ -236,12 +236,20 @@ def store_embeddings(rank, config, world_size):
         Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
 
         ds = TSVDataset(config["path"])
-        dataloader = data.DataLoader(
-            ds,
-            batch_size=config["batch_size"],
-            shuffle=False,
-            sampler=DistributedSampler(ds),
+        max_tokens = config["max_tokens"]
+        chunk_size = len(ds) // world_size
+
+        # Each GPU gets its own part of the dataset
+        dataloader = MaxTokensLoader(
+            ds, max_tokens, start_ind=rank * chunk_size, chunk_size=chunk_size
         )
+
+        # dataloader = data.DataLoader(
+        #     ds,
+        #     batch_size=config["batch_size"],
+        #     shuffle=False,
+        #     sampler=DistributedSampler(ds),
+        # )
 
         llm = choose_llm(config)
         llm.to(device)
@@ -331,7 +339,7 @@ def train_classifier(rank, config, world_size):
         if rank == 0:
             timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
             logger = init_logger(timestamp)
-            init_wandb(config["model_folder"], classifier, timestamp)
+            init_wandb(config["model_folder"], timestamp, classifier)
 
         # To wait for wandb to get initialized
         dist.barrier()
@@ -520,21 +528,24 @@ if __name__ == "__main__":
         description="Module that contains training and evaluation. Will be separated."
     )
     parser.add_argument(
-        "-e", "--emb_type", help="Type of embedding to be used", type=str, required=True
+        "-e",
+        "--emb_type",
+        help="Type of embedding to be used",
+        type=str,
+        required=False,
+        default="ESM",
     )
     parser.add_argument(
         "-w",
         "--wandb_key",
         help="Wandb API key. If not supplied it is expected that you are already logged in on your machine",
         type=str,
-        required=False,
-        default=None,
+        required=True,
     )
     args = parser.parse_args()
-    if args.wandb_key:
-        wandb.login(key=args.wandb_key)
+    wandb.login(key=args.wandb_key)
     warnings.filterwarnings("ignore")
     config = ConfigProviderFactory.get_config_provider(args.emb_type).get_config()
     world_size = torch.cuda.device_count()
-    # mp.spawn(train_classifier, args=(config, world_size), nprocs=world_size)
-    mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
+    mp.spawn(train_classifier, args=(config, world_size), nprocs=world_size)
+    # mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
