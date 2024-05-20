@@ -38,6 +38,7 @@ import torch.distributed as dist
 
 from embedding_esm import EsmEmbedding
 from embedding_protein_trans import ProteinTransEmbedding
+from embedding_protein_vec import ProteinVecEmbedding
 from dataset import CustomDataset, TSVDataset, MaxTokensLoader
 from config import get_weights_file_path, ConfigProviderFactory
 from utils import check_gpu_used_memory
@@ -186,8 +187,10 @@ def choose_llm(config):
     """
     if config["emb_type"] == "ESM":
         return EsmEmbedding()
-    if config["emb_type"] == "PTRANS":
+    elif config["emb_type"] == "PTRANS":
         return ProteinTransEmbedding(model_name=config["prot_trans_model_name"])
+    elif config["emb_type"] == "PVEC":
+        return ProteinVecEmbedding()
     else:
         raise NotImplementedError("This type of embedding is not supported")
 
