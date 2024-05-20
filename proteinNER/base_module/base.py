@@ -13,6 +13,7 @@ from dataclasses import field
 from pathlib import Path
 from datetime import timedelta, datetime
 from typing import Optional, Union
+from functools import partial
 
 from accelerate import Accelerator, InitProcessGroupKwargs
 from accelerate.utils import set_seed
@@ -143,6 +144,7 @@ class BaseTrainer(ABC):
         model_name_or_path = kwargs.get('model_name_or_path')
         legacy = kwargs.get('legacy', False)
         do_lower_case = kwargs.get('do_lower_case', False)
+        is_valid = kwargs.get('is_valid', False)
 
         if dataset_type == 'class':
             dataset = CustomNERDataset(
@@ -157,29 +159,24 @@ class BaseTrainer(ABC):
         else:
             raise ValueError('Got an invalid dataset mode, ONLY SUPPORT: `class` and `embed`')
 
+        partial_collate_fn = partial(dataset.collate_fn, is_valid=is_valid)
+
         if mode == 'train':
             self.train_loader = DataLoader(
                 dataset=dataset,
                 batch_size=self.batch_size,
-                collate_fn=dataset.collate_fn,
+                collate_fn=partial_collate_fn,
                 shuffle=True,
             )
         elif mode == 'test':
             self.test_loader = DataLoader(
                 dataset=dataset,
                 batch_size=self.batch_size,
-                collate_fn=dataset.collate_fn,
-                shuffle=False,
-            )
-        elif mode == 'valid':
-            self.valid_loader = DataLoader(
-                dataset=dataset,
-                batch_size=self.batch_size,
-                collate_fn=dataset.collate_fn,
+                collate_fn=partial_collate_fn,
                 shuffle=False,
             )
         else:
-            raise ValueError('Got an invalid data loader mode, ONLY SUPPORT: `train`, `test` and `valid`')
+            raise ValueError('Got an invalid data loader mode, ONLY SUPPORT: `train` and `test`!')
 
     def register_model(self, model, **kwargs):
         reuse = kwargs.get('reuse', False)
@@ -230,33 +227,19 @@ class BaseTrainer(ABC):
             self.optimizer.load_state_dict(trainer_ckpt['optimizer'])
             self.lr_scheduler.load_state_dict(trainer_ckpt['lr_scheduler'])
 
-        model_ckpt = torch.load(osp.join(ckpt_home, 'classifier.bin'), map_location=torch.device('cuda'))
         state_dict = self.model.state_dict()
-        trained_dict = {k: v for k, v in model_ckpt['state_dict'].items() if k in state_dict}
-        state_dict.update(trained_dict)
-        self.model.load_state_dict(state_dict)
 
-        # # loading LoRA model
-        # lora_weight_tensor = {}
-        # with safe_open(osp.join(ckpt_home, 'adapter_model.safetensors'), framework='pt') as file:
-        #     for key in file.keys():
-        #         lora_weight_tensor[key.replace('weight', 'default.weight')] = file.get_tensor(key)
-        #
-        # for name, weight in self.model.embedding.lora_embedding.named_parameters():
-        #     if name not in lora_weight_tensor.keys():
-        #         continue
-        #     if weight.requires_grad:
-        #         assert weight.data.size() == lora_weight_tensor[name].size(), f'Got an invalid key: `{name}`!'
-        #         weight.data.copy_(lora_weight_tensor[name])
-        #         if not is_trainable:
-        #             weight.requires_grad = False
-        #
-        # # loading token classifier
-        # classifier_ckpt = torch.load(osp.join(ckpt_home, 'classifier.bin'), map_location=torch.device('cuda'))
-        # classifier_state_dict = self.model.classifier.state_dict()
-        # classifier_trained_dict = {k: v for k, v in classifier_ckpt['state_dict'].items() if k in classifier_state_dict}
-        # classifier_state_dict.update(classifier_trained_dict)
-        # self.model.classifier.load_state_dict(classifier_state_dict)
+        transition_dict = torch.load(osp.join(ckpt_home, 'transition.bin'), map_location=torch.device('cuda'))
+        transition_trained_dict = {k.replace(k, f'transition.{k}'): v for k, v in transition_dict['state_dict'].items()
+                                   if k.replace(k, f'transition.{k}') in state_dict}
+        state_dict.update(transition_trained_dict)
+
+        crf_dict = torch.load(osp.join(ckpt_home, 'crf.bin'), map_location=torch.device('cuda'))
+        crf_trained_dict = {k.replace(k, f'crf.{k}'): v for k, v in crf_dict['state_dict'].items() if
+                            k.replace(k, f'crf.{k}') in state_dict}
+        state_dict.update(crf_trained_dict)
+
+        self.model.load_state_dict(state_dict)
 
     def print_trainable_parameters(self):
         total = 0

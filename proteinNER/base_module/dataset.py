@@ -5,6 +5,7 @@
 # @File    : dataset.py
 # @Email   : zhangchao5@genomics.cn
 import re
+import os.path as osp
 import math
 import pickle
 import torch
@@ -36,13 +37,14 @@ class CustomNERDataset(Dataset):
         label = []
         for tag in data['token_label']:
             label.append(self.label2id[tag])
-        return {'seq': data['seq'], 'label': torch.tensor(label)}
+        return {'seq': data['seq'], 'label': label, 'protein_id': osp.splitext(osp.basename(self.pairs_path[idx]))[0]}
 
-    def collate_fn(self, batch_sample):
-        batch_seq, batch_label = [], []
+    def collate_fn(self, batch_sample, is_valid):
+        batch_seq, batch_label, batch_protein_id = [], [], []
         for sample in batch_sample:
             batch_seq.append(sample['seq'])
             batch_label.append(sample['label'])
+            batch_protein_id.append(sample['protein_id'])
         batch_seq = self.prepare_sequence(batch_seq)
         tokens = self.tokenizer.batch_encode_plus(
             batch_text_or_text_pairs=batch_seq,
@@ -51,9 +53,13 @@ class CustomNERDataset(Dataset):
         )
         input_ids = torch.tensor(tokens['input_ids'])
         attention_mask = torch.tensor(tokens['attention_mask'])
-        batch_label = torch.nn.utils.rnn.pad_sequence(batch_label, batch_first=True, padding_value=0)
-        batch_label = torch.tensor(batch_label)
-        return input_ids, attention_mask, batch_label
+
+        if not is_valid:
+            batch_label = torch.nn.utils.rnn.pad_sequence(batch_label, batch_first=True, padding_value=0)
+            batch_label = torch.tensor(batch_label)
+            return input_ids, attention_mask, batch_label
+        else:
+            return input_ids, attention_mask, batch_label, batch_protein_id
 
     @staticmethod
     def prepare_sequence(
@@ -112,4 +118,3 @@ class SequentialDistributedSampler(Sampler):
 
     def __len__(self):
         return self.num_samples
-

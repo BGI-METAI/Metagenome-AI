@@ -5,6 +5,8 @@
 # @File    : trainer.py
 # @Email   : zhangchao5@genomics.cn
 import torch
+import pickle
+import os.path as osp
 import numpy as np
 
 from tqdm import tqdm
@@ -77,100 +79,22 @@ class ProteinAANERTrainer(BaseTrainer):
                 self.save_ckpt(mode='best')
 
     @torch.no_grad()
-    def valid_model_performance(self, test_loader):
-        self.model.eval()
-        accuracy = []
-        precision = []
-        batch_iterator = tqdm(test_loader, desc=f'Pid: {self.accelerator.process_index}')
-        for idx, sample in enumerate(batch_iterator):
-            input_ids, attention_mask, batch_label = sample
-            logist = self.model(input_ids, attention_mask)
-            pred = torch.nn.functional.softmax(logist, dim=-1).argmax(-1)
-
-            acc = self.accuracy_token_level(predict=pred, label=batch_label)
-            accuracy.append(acc.unsqueeze(dim=0))
-
-            pres = self.precision_entity_level(predict=pred, label=batch_label)
-            precision.append(pres.unsqueeze(dim=0))
-
-        accuracy = self.accelerator.gather(torch.cat(accuracy, dim=0))
-        precision = self.accelerator.gather(torch.cat(precision, dim=0))
-
-        self.accelerator.log({'Accuracy (Token Level)': accuracy.mean().item()})
-        self.accelerator.log({'Precision (Entity Level)': precision.mean().item()})
-
-    @staticmethod
-    def accuracy_token_level(predict, label):
-        return torch.eq(predict, label).float().mean()
-
-    def precision_entity_level(self, predict, label):
-        correct_dict = {i: torch.zeros(1).to(self.accelerator.device) for i in
-                        range(1, self.model.classifier.out_features)}
-        predict_dict = {i: torch.zeros(1).to(self.accelerator.device) for i in
-                        range(1, self.model.classifier.out_features)}
-        label_dict = {i: torch.zeros(1).to(self.accelerator.device) for i in
-                      range(1, self.model.classifier.out_features)}
-
-        predict = predict.flatten()
-        label = label.flatten()
-        mask = label.bool()
-
-        correct_tag = (torch.eq(predict, label) * mask).float()
-        correct_start_pos, correct_end_pos = self.get_position_interval_of_consecutive_nonzero_values(correct_tag)
-        if correct_start_pos:
-            for pos in correct_start_pos:
-                correct_dict[label[pos].item()] += 1
-
-        predict_start_pos, predict_end_pos = self.get_position_interval_of_consecutive_nonzero_values(predict)
-        if predict_start_pos:
-            for pos in predict_start_pos:
-                predict_dict[predict[pos].item()] += 1
-
-        label_start_pos, label_end_pos = self.get_position_interval_of_consecutive_nonzero_values(label)
-        if label_start_pos:
-            for pos in label_start_pos:
-                label_dict[label[pos].item()] += 1
-
-        precision_list = []
-        for k in correct_dict.keys():
-            if predict_dict[k] == 0 and label_dict[k] == 0:
-                continue
-
-            if predict_dict[k] == 0:
-                score = torch.zeros(1).to(self.accelerator.device)
-            else:
-                score = correct_dict[k] / predict_dict[k]
-            precision_list.append(score)
-        return torch.tensor(precision_list).to(self.accelerator.device).float().mean()
-
-    @staticmethod
-    def get_position_interval_of_consecutive_nonzero_values(data):
-        data = data.flatten()
-        nonzero_indices = torch.nonzero(data)
-        nonzero_values = data[nonzero_indices]
-        start_positions = []
-        end_positions = []
-
-        current_start = None
-        prev_value = None
-        for i in range(len(nonzero_indices)):
-            value = nonzero_values[i]
-            if current_start is None:
-                current_start = nonzero_indices[i]
-                prev_value = value
-            elif value != prev_value:
-                start_positions.append(current_start.item())
-                end_positions.append(nonzero_indices[i - 1].item())
-                current_start = nonzero_indices[i]
-                prev_value = value
-
-        if current_start is not None:
-            start_positions.append(current_start.item())
-            end_positions.append(nonzero_indices[-1].item())
-
-        return start_positions, end_positions
+    def valid_model_performance(self, **kwargs):
+        self.inference(*kwargs)
 
     @torch.no_grad()
     def inference(self, **kwargs):
-        raise NotImplementedError
+        model = self.accelerator.prepare_model(self.model)
+        data_loader = self.accelerator.prepare_data_loader(self.test_loader)
 
+        self.model.eval()
+
+        batch_iterator = tqdm(data_loader, desc=f'Pid: {self.accelerator.process_index}')
+
+        for idx, sample in enumerate(batch_iterator):
+            input_ids, attention_mask, batch_label, batch_protein_ids = sample
+            pred = model.module.inference(input_ids, attention_mask)
+
+            for cnt in range(self.batch_size):
+                pickle.dump({'label': batch_label[cnt], 'pred': pred[cnt]},
+                            open(osp.join(self.result_home, f'{batch_protein_ids[cnt]}.pkl'), 'wb'))

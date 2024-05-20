@@ -23,8 +23,7 @@ def register_parameters():
     parser.add_argument('--model_path_or_name', type=str, required=True, help='pretrianed pLM model path or name')
     parser.add_argument('--seed', type=int, default=42, help='random seed')
     parser.add_argument('--batch_size', type=int, default=3, help='batch size')
-    parser.add_argument('--num_classes', type=int, default=6595,
-                        help='the number of categories')  # PFAM: 20794, GENE3D: 6595
+    parser.add_argument('--num_classes', type=int, required=True, help='the number of categories')
 
     parser.add_argument('--epoch', type=int, default=100)
     parser.add_argument('--learning_rate', type=float, default=5e-5)
@@ -36,6 +35,8 @@ def register_parameters():
                         help='whether to load the optimal model, effective when reuse is true')
     parser.add_argument('--is_trainable', action='store_true',
                         help='Whether the LoRA adapter should be trainable or not.')
+    parser.add_argument('--is_valid', action='store_true',
+                        help='Whether to verify model performance')
 
     parser.add_argument('--user_name', type=str, default='zhangchao162', help='wandb register parameter')
     parser.add_argument('--project', type=str, default='ProteinConvCRF', help='wandb project name')
@@ -55,6 +56,11 @@ def worker():
     random.seed(args.seed)
     random.shuffle(train_files)
 
+    test_files = []
+    with open(args.test_data_path, 'r') as file:
+        for line in file.readlines():
+            test_files.append(line.strip())
+
     # initialize trainer class
     trainer = ProteinAANERTrainer(output_home=args.output_home, k=args.k)
 
@@ -68,6 +74,16 @@ def worker():
         model_name_or_path=args.model_path_or_name
     )
 
+    trainer.register_dataset(
+        data_files=test_files[:100000],
+        label2id_path=args.label2id_path,
+        mode='test',
+        dataset_type='class',
+        batch_size=args.batch_size,
+        is_valid=args.is_valid,
+        model_name_or_path=args.model_path_or_name
+    )
+
     model = ProtT5Conv1dCRF4AAClassifier(model_name_or_path=args.model_path_or_name, num_classes=args.num_classes)
     trainer.register_model(
         model=model,
@@ -76,9 +92,12 @@ def worker():
         learning_rate=args.learning_rate,
         mode=args.mode
     )
-    trainer.print_trainable_parameters()
 
-    trainer.train(**vars(args))
+    if not args.is_valid:
+        trainer.print_trainable_parameters()
+        trainer.train(**vars(args))
+    else:
+        trainer.valid_model_performance()
 
 
 if __name__ == '__main__':
