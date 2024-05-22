@@ -58,6 +58,12 @@ class ProtTransT5ForAAClassifier(nn.Module):
         return self.classifier(self.embedding(input_ids, attention_mask))
 
 
+class TransitionModel(nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels):
+        super(TransitionModel, self).__init__()
+        raise NotImplementedError
+
+
 class ProtT5Conv1dCRF4AAClassifier(nn.Module):
     def __init__(self, model_name_or_path, num_classes):
         super(ProtT5Conv1dCRF4AAClassifier, self).__init__()

@@ -30,6 +30,8 @@ def register_parameters():
     parser.add_argument('--loss_weight', type=float, default=1.)
     parser.add_argument('--patience', type=int, default=1)
     parser.add_argument('--k', type=int, default=100, help='Gradient accumulation parameters')
+    parser.add_argument('--lr_decay_step', type=int, default=2, help='Period of learning rate decay')
+    parser.add_argument('--lr_decay_gamma', type=float, default=0.99, help='Multiplicative factor of learning rate decay')
     parser.add_argument('--reuse', action='store_true')
     parser.add_argument('--mode', default='best',
                         help='whether to load the optimal model, effective when reuse is true')
@@ -90,7 +92,9 @@ def worker():
         reuse=args.reuse,
         is_trainable=args.is_trainable,
         learning_rate=args.learning_rate,
-        mode=args.mode
+        mode=args.mode,
+        lr_decay_step=args.lr_decay_step,
+        lr_decay_gamma=args.lr_decay_gamma
     )
 
     if not args.is_valid:

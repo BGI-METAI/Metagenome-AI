@@ -45,8 +45,8 @@ class BaseTrainer(ABC):
 
         set_seed(kwargs.get('seed', 42))
         process_group_kwargs = InitProcessGroupKwargs(
-            timeout=timedelta(seconds=5400)
-        )  # 1.5 hours
+            timeout=timedelta(seconds=10800)
+        )
         self.accelerator = Accelerator(
             mixed_precision='fp16',
             log_with='wandb',
@@ -183,11 +183,13 @@ class BaseTrainer(ABC):
         is_trainable = kwargs.get('is_trainable', True)
         self.learning_rate = kwargs.get('learning_rate', 1e-3)
         mode = kwargs.get('mode', 'best')
+        lr_decay_step = kwargs.get('lr_decay_step', 2)
+        lr_decay_gamma = kwargs.get('lr_decay_gamma', 0.99)
 
         self.model = model
         if is_trainable:
             self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate)
-            self.lr_scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, 1, gamma=0.9)
+            self.lr_scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, lr_decay_step, gamma=lr_decay_gamma)
 
         if reuse:
             self.load_ckpt(mode=mode, is_trainable=is_trainable)

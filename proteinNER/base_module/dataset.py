@@ -37,7 +37,7 @@ class CustomNERDataset(Dataset):
         label = []
         for tag in data['token_label']:
             label.append(self.label2id[tag])
-        return {'seq': data['seq'], 'label': label, 'protein_id': osp.splitext(osp.basename(self.pairs_path[idx]))[0]}
+        return {'seq': data['seq'], 'label': torch.tensor(label), 'protein_id': osp.splitext(osp.basename(self.pairs_path[idx]))[0]}
 
     def collate_fn(self, batch_sample, is_valid):
         batch_seq, batch_label, batch_protein_id = [], [], []
