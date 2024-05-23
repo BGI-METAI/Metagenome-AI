@@ -267,18 +267,14 @@ def store_embeddings(rank, config, world_size):
         llm = choose_llm(config)
         llm.to(device)
 
-        if rank == 0:
-            init_wandb(config["model_folder"], timestamp)
-
         timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
         logger = init_logger(timestamp)
 
+        if rank == 0:
+            init_wandb(config["model_folder"], timestamp)
+
         dist.barrier()
-        mem_use_cnt = 0
         for batch in dataloader:
-            mem_use_cnt += 1
-            if rank == 0 and mem_use_cnt % 50 == 0:
-                check_gpu_used_memory()
             try:
                 with torch.no_grad():
                     llm.store_embeddings(batch, config["out_dir"])
@@ -304,8 +300,12 @@ def train_classifier_from_stored_single_gpu(config):
         ds, batch_size=config["batch_size"], shuffle=True, num_workers=3
     )
 
-    # llm = choose_llm(config)
-    # d_model = llm.get_embedding_dim()
+    # Or replace this part to be a part of the config as well
+    llm = choose_llm(config)
+    d_model = llm.get_embedding_dim()
+
+    classifier = Classifier(d_model, num_classes).to(rank)
+    optimizer = torch.optim.Adam(classifier.parameters(), lr=config["lr"], eps=1e-9)
 
     for epoch in range(config["num_epochs"]):
         for batch in dataloader:

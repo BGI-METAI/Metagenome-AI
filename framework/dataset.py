@@ -43,7 +43,7 @@ class CustomDataset(Dataset):
 class TSVDataset(Dataset):
     def __init__(self, path):
         with open(path) as file:
-            reader = csv.reader(file, delimiter=" ", quotechar='"')
+            reader = csv.reader(file, delimiter=" ")
             self.samples = list(reader)
 
     def __len__(self):
@@ -51,7 +51,13 @@ class TSVDataset(Dataset):
 
     def __getitem__(self, idx):
         sample = self.samples[idx]
-        return {"protein_id": sample[0], "len": sample[1], "sequence": sample[2]}
+        # TODO add labels as well, but like multihot encoding probably the best
+        return {
+            "protein_id": sample[0],
+            "len": sample[1],
+            "sequence": sample[2],
+            "labels": sample[3:],
+        }
 
 
 class MaxTokensLoader:
@@ -66,15 +72,18 @@ class MaxTokensLoader:
         batch = defaultdict(list)
         total_tokens = 0
         for idx in range(self.start_ind, self.start_ind + self.chunk_size):
-            sample = self.dataset[idx]
-            batch["protein_id"].append(sample["protein_id"])
-            batch["sequence"].append(sample["sequence"])
-            total_tokens += int(sample["len"])
-            if total_tokens > self.max_tokens:
-                yield batch
-                batch = defaultdict(list)
-                total_tokens = 0
-        if batch.size(0) > 0 and not self.drop_last:
+            try:
+                sample = self.dataset[idx]
+                batch["protein_id"].append(sample["protein_id"])
+                batch["sequence"].append(sample["sequence"])
+                total_tokens += int(sample["len"])
+                if total_tokens > self.max_tokens:
+                    yield batch
+                    batch = defaultdict(list)
+                    total_tokens = 0
+            except IndexError:
+                print(f"Attempted to access index {idx} of dataset. Not a ")
+        if len(batch) > 0 and not self.drop_last:
             yield batch
 
 
