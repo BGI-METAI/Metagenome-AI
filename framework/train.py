@@ -251,10 +251,18 @@ def store_embeddings(rank, config, world_size):
         ds = TSVDataset(config["path"])
         max_tokens = config["max_tokens"]
         chunk_size = len(ds) // world_size
+        remainder = len(ds) % world_size
+
+        start = 0
+        indices = []
+        for i in range(world_size):
+            end = start + chunk_size + (1 if i < remainder else 0)
+            indices.append((start, end))
+            start = end
 
         # Each GPU gets its own part of the dataset
         dataloader = MaxTokensLoader(
-            ds, max_tokens, start_ind=rank * chunk_size, chunk_size=chunk_size
+            ds, max_tokens, start_ind=indices[rank][0], end_ind=indices[rank][1]
         )
 
         # dataloader = data.DataLoader(
@@ -267,18 +275,14 @@ def store_embeddings(rank, config, world_size):
         llm = choose_llm(config)
         llm.to(device)
 
-        if rank == 0:
-            init_wandb(config["model_folder"], timestamp)
-
         timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
         logger = init_logger(timestamp)
 
+        if rank == 0:
+            init_wandb(config["model_folder"], timestamp)
+
         dist.barrier()
-        mem_use_cnt = 0
         for batch in dataloader:
-            mem_use_cnt += 1
-            if rank == 0 and mem_use_cnt % 50 == 0:
-                check_gpu_used_memory()
             try:
                 with torch.no_grad():
                     llm.store_embeddings(batch, config["out_dir"])
@@ -304,8 +308,12 @@ def train_classifier_from_stored_single_gpu(config):
         ds, batch_size=config["batch_size"], shuffle=True, num_workers=3
     )
 
-    # llm = choose_llm(config)
-    # d_model = llm.get_embedding_dim()
+    # Or replace this part to be a part of the config as well
+    llm = choose_llm(config)
+    d_model = llm.get_embedding_dim()
+
+    classifier = Classifier(d_model, num_classes).to(rank)
+    optimizer = torch.optim.Adam(classifier.parameters(), lr=config["lr"], eps=1e-9)
 
     for epoch in range(config["num_epochs"]):
         for batch in dataloader:
@@ -582,5 +590,5 @@ if __name__ == "__main__":
     config = ConfigProviderFactory.get_config_provider(args.emb_type).get_config()
     world_size = torch.cuda.device_count()
     # mp.spawn(train_classifier, args=(config, world_size), nprocs=world_size)
-    # mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
-    train_classifier_from_stored_single_gpu(config)
+    mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
+    # train_classifier_from_stored_single_gpu(config)
