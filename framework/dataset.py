@@ -61,17 +61,17 @@ class TSVDataset(Dataset):
 
 
 class MaxTokensLoader:
-    def __init__(self, dataset, max_tokens, start_ind, chunk_size, drop_last=False):
+    def __init__(self, dataset, max_tokens, start_ind, end_ind, drop_last=False):
         self.dataset = dataset
         self.max_tokens = max_tokens
         self.start_ind = start_ind
-        self.chunk_size = chunk_size
+        self.end_ind = end_ind
         self.drop_last = drop_last
 
     def __iter__(self):
         batch = defaultdict(list)
         total_tokens = 0
-        for idx in range(self.start_ind, self.start_ind + self.chunk_size):
+        for idx in range(self.start_ind, self.end_ind):
             try:
                 sample = self.dataset[idx]
                 batch["protein_id"].append(sample["protein_id"])
@@ -82,7 +82,7 @@ class MaxTokensLoader:
                     batch = defaultdict(list)
                     total_tokens = 0
             except IndexError:
-                print(f"Attempted to access index {idx} of dataset. Not a ")
+                print(f"Attempted to access index {idx} of dataset.")
         if len(batch) > 0 and not self.drop_last:
             yield batch
 

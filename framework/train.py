@@ -251,10 +251,18 @@ def store_embeddings(rank, config, world_size):
         ds = TSVDataset(config["path"])
         max_tokens = config["max_tokens"]
         chunk_size = len(ds) // world_size
+        remainder = len(ds) % world_size
+
+        start = 0
+        indices = []
+        for i in range(world_size):
+            end = start + chunk_size + (1 if i < remainder else 0)
+            indices.append((start, end))
+            start = end
 
         # Each GPU gets its own part of the dataset
         dataloader = MaxTokensLoader(
-            ds, max_tokens, start_ind=rank * chunk_size, chunk_size=chunk_size
+            ds, max_tokens, start_ind=indices[rank][0], end_ind=indices[rank][1]
         )
 
         # dataloader = data.DataLoader(
@@ -582,5 +590,5 @@ if __name__ == "__main__":
     config = ConfigProviderFactory.get_config_provider(args.emb_type).get_config()
     world_size = torch.cuda.device_count()
     # mp.spawn(train_classifier, args=(config, world_size), nprocs=world_size)
-    # mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
-    train_classifier_from_stored_single_gpu(config)
+    mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
+    # train_classifier_from_stored_single_gpu(config)
