@@ -93,8 +93,8 @@ class ProteinAANERTrainer(BaseTrainer):
 
         for idx, sample in enumerate(batch_iterator):
             input_ids, attention_mask, batch_label, batch_protein_ids = sample
-            pred = model.module.inference(input_ids, attention_mask)
+            results = model.module.inference(input_ids, attention_mask)
 
             for cnt in range(self.batch_size):
-                pickle.dump({'label': batch_label[cnt], 'pred': pred[cnt]},
+                pickle.dump(results[cnt].update({'ground_label': batch_label[cnt].detach().cpu().tolist()}),
                             open(osp.join(self.result_home, f'{batch_protein_ids[cnt]}.pkl'), 'wb'))
