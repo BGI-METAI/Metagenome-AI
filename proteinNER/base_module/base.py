@@ -13,17 +13,15 @@ from dataclasses import field
 from pathlib import Path
 from datetime import timedelta, datetime
 from typing import Optional, Union
+from functools import partial
 
 from accelerate import Accelerator, InitProcessGroupKwargs
 from accelerate.utils import set_seed
 from torch.optim.lr_scheduler import LRScheduler
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
-from safetensors import safe_open
 
-from proteinNER.base_module import CustomNERDatasetCL
 from proteinNER.base_module import CustomNERDataset
-from proteinNER.base_module.dataset import CustomPEFTEmbeddingDataset
 from proteinNER.classifier.model import ProtTransT5ForAAClassifier
 
 
@@ -47,10 +45,10 @@ class BaseTrainer(ABC):
 
         set_seed(kwargs.get('seed', 42))
         process_group_kwargs = InitProcessGroupKwargs(
-            timeout=timedelta(seconds=54000)
-        )  # 1.5 hours
+            timeout=timedelta(seconds=10800)
+        )
         self.accelerator = Accelerator(
-            mixed_precision='fp16',# 混合精度，可能导致loss NAN
+            mixed_precision='fp16',
             log_with='wandb',
             gradient_accumulation_steps=kwargs.get('k', 1),
             kwargs_handlers=[process_group_kwargs]
@@ -128,6 +126,7 @@ class BaseTrainer(ABC):
     def register_dataset(
             self,
             data_files,
+            label2id_path,
             mode,
             dataset_type='class',
             **kwargs
@@ -135,6 +134,7 @@ class BaseTrainer(ABC):
         """
 
         :param data_files: pickle files path list of protein sequence
+        :param label2id_path:
         :param mode: data loader type, optional, only support `train`, `test` and `valid`
         :param dataset_type: dataset type, optional, only support `class` and `embed`
 
@@ -144,64 +144,52 @@ class BaseTrainer(ABC):
         model_name_or_path = kwargs.get('model_name_or_path')
         legacy = kwargs.get('legacy', False)
         do_lower_case = kwargs.get('do_lower_case', False)
+        is_valid = kwargs.get('is_valid', False)
 
         if dataset_type == 'class':
             dataset = CustomNERDataset(
                 processed_sequence_label_pairs_path=data_files,
+                label2id_path=label2id_path,
                 tokenizer_model_name_or_path=model_name_or_path,
                 legacy=legacy,
                 do_lower_case=do_lower_case
             )
-            # dataset = CustomNERDatasetCL(
-            #     processed_sequence_label_pairs_path=data_files,
-            #     tokenizer_model_name_or_path=model_name_or_path,
-            #     legacy=legacy,
-            #     do_lower_case=do_lower_case
-            # )
         elif dataset_type == 'embed':
-            dataset = CustomPEFTEmbeddingDataset(
-                incremental_protein_sequence_path=data_files,
-                tokenizer_model_name_or_path=model_name_or_path,
-                legacy=legacy,
-                do_lower_case=do_lower_case
-            )
+            raise NotImplementedError
         else:
             raise ValueError('Got an invalid dataset mode, ONLY SUPPORT: `class` and `embed`')
+
+        partial_collate_fn = partial(dataset.collate_fn, is_valid=is_valid)
 
         if mode == 'train':
             self.train_loader = DataLoader(
                 dataset=dataset,
                 batch_size=self.batch_size,
-                collate_fn=dataset.collate_fn,
+                collate_fn=partial_collate_fn,
                 shuffle=True,
             )
         elif mode == 'test':
             self.test_loader = DataLoader(
                 dataset=dataset,
                 batch_size=self.batch_size,
-                collate_fn=dataset.collate_fn,
-                shuffle=False,
-            )
-        elif mode == 'valid':
-            self.valid_loader = DataLoader(
-                dataset=dataset,
-                batch_size=self.batch_size,
-                collate_fn=dataset.collate_fn,
+                collate_fn=partial_collate_fn,
                 shuffle=False,
             )
         else:
-            raise ValueError('Got an invalid data loader mode, ONLY SUPPORT: `train`, `test` and `valid`')
+            raise ValueError('Got an invalid data loader mode, ONLY SUPPORT: `train` and `test`!')
 
     def register_model(self, model, **kwargs):
         reuse = kwargs.get('reuse', False)
         is_trainable = kwargs.get('is_trainable', True)
         self.learning_rate = kwargs.get('learning_rate', 1e-3)
         mode = kwargs.get('mode', 'best')
+        lr_decay_step = kwargs.get('lr_decay_step', 2)
+        lr_decay_gamma = kwargs.get('lr_decay_gamma', 0.99)
 
         self.model = model
         if is_trainable:
             self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate)
-            self.lr_scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, 1, gamma=0.9)
+            self.lr_scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, lr_decay_step, gamma=lr_decay_gamma)
 
         if reuse:
             self.load_ckpt(mode=mode, is_trainable=is_trainable)
@@ -213,53 +201,59 @@ class BaseTrainer(ABC):
                 "optimizer": self.optimizer.state_dict(),
                 "lr_scheduler": self.lr_scheduler.state_dict(),
             }
-            classifier_dict = {"state_dict": unwrapped_model.classifier.state_dict()}
+            transition_state_dict = {"state_dict": unwrapped_model.transition.state_dict()}
+            crf_state_dict = {"state_dict": unwrapped_model.crf.state_dict()}
 
             if mode == 'batch':
                 self.accelerator.save(trainer_dict, osp.join(self.batch_ckpt_home, 'trainer.bin'))
-                self.accelerator.save(classifier_dict, osp.join(self.batch_ckpt_home, 'classifier.bin'))
-                unwrapped_model.embedding.lora_embedding.save_pretrained(self.batch_ckpt_home)
+                self.accelerator.save(transition_state_dict, osp.join(self.batch_ckpt_home, 'transition.bin'))
+                self.accelerator.save(crf_state_dict, osp.join(self.batch_ckpt_home, 'crf.bin'))
+
             elif mode in ['epoch', 'best']:
                 self.accelerator.save(trainer_dict, osp.join(self.best_ckpt_home, 'trainer.bin'))
-                self.accelerator.save(classifier_dict, osp.join(self.best_ckpt_home, 'classifier.bin'))
-                unwrapped_model.embedding.lora_embedding.save_pretrained(self.best_ckpt_home)
+                self.accelerator.save(transition_state_dict, osp.join(self.best_ckpt_home, 'transition.bin'))
+                self.accelerator.save(crf_state_dict, osp.join(self.best_ckpt_home, 'crf.bin'))
             else:
                 raise ValueError('Got an invalid dataset mode, ONLY SUPPORT: `batch`, `epoch` or `best`')
 
     def load_ckpt(self, mode, is_trainable=False):
         if mode == 'batch':
-            path = self.batch_ckpt_home
+            ckpt_home = self.batch_ckpt_home
         elif mode in ['epoch', 'best']:
-            path = self.best_ckpt_home
+            ckpt_home = self.best_ckpt_home
         else:
             raise ValueError('Got an invalid dataset mode, ONLY SUPPORT: `batch`, `epoch` or `best`')
 
         if is_trainable:
-            trainer_ckpt = torch.load(osp.join(path, 'trainer.bin'), map_location=torch.device('cuda'))
+            trainer_ckpt = torch.load(osp.join(ckpt_home, 'trainer.bin'), map_location=torch.device('cuda'))
             self.optimizer.load_state_dict(trainer_ckpt['optimizer'])
             self.lr_scheduler.load_state_dict(trainer_ckpt['lr_scheduler'])
 
-        # loading LoRA model
-        lora_weight_tensor = {}
-        with safe_open(osp.join(path, 'adapter_model.safetensors'), framework='pt') as file:
-            for key in file.keys():
-                lora_weight_tensor[key.replace('weight', 'default.weight')] = file.get_tensor(key)
+        state_dict = self.model.state_dict()
 
-        for name, weight in self.model.embedding.lora_embedding.named_parameters():
-            if name not in lora_weight_tensor.keys():
-                continue
-            if weight.requires_grad:
-                assert weight.data.size() == lora_weight_tensor[name].size(), f'Got an invalid key: `{name}`!'
-                weight.data.copy_(lora_weight_tensor[name])
-                if not is_trainable:
-                    weight.requires_grad = False
+        transition_dict = torch.load(osp.join(ckpt_home, 'transition.bin'), map_location=torch.device('cuda'))
+        transition_trained_dict = {k.replace(k, f'transition.{k}'): v for k, v in transition_dict['state_dict'].items()
+                                   if k.replace(k, f'transition.{k}') in state_dict}
+        state_dict.update(transition_trained_dict)
 
-        # loading token classifier
-        classifier_ckpt = torch.load(osp.join(path, 'classifier.bin'), map_location=torch.device('cuda'))
-        classifier_state_dict = self.model.classifier.state_dict()
-        classifier_trained_dict = {k: v for k, v in classifier_ckpt['state_dict'].items() if k in classifier_state_dict}
-        classifier_state_dict.update(classifier_trained_dict)
-        self.model.classifier.load_state_dict(classifier_state_dict)
+        crf_dict = torch.load(osp.join(ckpt_home, 'crf.bin'), map_location=torch.device('cuda'))
+        crf_trained_dict = {k.replace(k, f'crf.{k}'): v for k, v in crf_dict['state_dict'].items() if
+                            k.replace(k, f'crf.{k}') in state_dict}
+        state_dict.update(crf_trained_dict)
+
+        self.model.load_state_dict(state_dict)
+
+    def print_trainable_parameters(self):
+        total = 0
+        trainable = 0
+
+        for k, v in self.model.named_parameters():
+            total += v.numel()
+            if v.requires_grad:
+                trainable += v.numel()
+        self.accelerator.log({
+            'Trainable Params': f'trainable params: {trainable} || all params: {total} || trainable%: {trainable / total:.15f}'
+        })
 
     @abstractmethod
     def train(self, **kwargs):
