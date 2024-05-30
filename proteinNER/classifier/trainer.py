@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # @Time    : 2024/3/28 14:12
 # @Author  : zhangchao
-# @File    : trainer.py
+# @File    : framework.py
 # @Email   : zhangchao5@genomics.cn
 import torch
 import pickle
@@ -96,5 +96,5 @@ class ProteinAANERTrainer(BaseTrainer):
             results = model.module.inference(input_ids, attention_mask)
 
             for cnt in range(self.batch_size):
-                pickle.dump(results[cnt].update({'ground_label': batch_label[cnt].detach().cpu().tolist()}),
-                            open(osp.join(self.result_home, f'{batch_protein_ids[cnt]}.pkl'), 'wb'))
+                results[cnt].update({'ground_label': batch_label[cnt].detach().cpu().tolist()})
+                pickle.dump(results[cnt], open(osp.join(self.result_home, f'{batch_protein_ids[cnt]}.pkl'), 'wb'))

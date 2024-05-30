@@ -115,7 +115,7 @@ class ProtT5Conv1dCRF4AAClassifier(nn.Module):
                 prob[f'{uniq_tag[0].item()}'] = torch.tensor(tmp, device=t_pred.device, requires_grad=False).mean()
                 emissions_label = emissions_pred[idx][:t_pred.size(0)].detach().cpu().tolist()
             elif uniq_tag.size(0) == 0:
-                prob['0'] = 1.
+                prob['0'] = 0.
                 emissions_label = pred
             else:
                 statistics = Counter(pred)
