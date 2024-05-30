@@ -26,7 +26,7 @@ def register_parameters():
     parser.add_argument(
         '--test_data_path',
         type=str,
-        default='/home/share/huadjyin/home/zhangchao5/dataset/gene3d/gene3d.test/chunk00.00.txt',
+        default='/home/share/huadjyin/home/zhangchao5/dataset/version1/gene3d/gene3d.test/chunk00.00.txt',
         help='the path of input dataset'
     )
     parser.add_argument(
@@ -37,7 +37,7 @@ def register_parameters():
     parser.add_argument(
         '--output_home',
         type=str,
-        default='/home/share/huadjyin/home/zhangkexin2/model/output',
+        default='/home/share/huadjyin/home/zhangkexin2/model/output/gene3d',
     )
     parser.add_argument(
         '--model_path_or_name',
@@ -45,7 +45,7 @@ def register_parameters():
         default='/home/share/huadjyin/home/zhangchao5/weight/prot_t5_xl_half_uniref50-enc',
         help='pretrianed pLM model path or name'
     )
-    parser.add_argument('--inference_length_threshold', type=int, default=50,
+    parser.add_argument('--inference_length_threshold', type=int, default=9,
                         help='inference domain length threshold')  # 50
     parser.add_argument('--seed', type=int, default=42, help='random seed')
     parser.add_argument('--batch_size', type=int, default=3, help='batch size')
@@ -76,12 +76,12 @@ def worker():
     args = register_parameters()
 
     # prepare dataset
-    train_files = []
-    with open(args.train_data_path, 'r') as file:
-        for line in file.readlines():
-            train_files.extend(line.strip().split(' '))
-    random.seed(args.seed)
-    random.shuffle(train_files)
+    # train_files = []
+    # with open(args.train_data_path, 'r') as file:
+    #     for line in file.readlines():
+    #         train_files.extend(line.strip().split(' '))
+    # random.seed(args.seed)
+    # random.shuffle(train_files)
 
     test_files = []
     with open(args.test_data_path, 'r') as file:
@@ -92,13 +92,13 @@ def worker():
     trainer = ProteinNERTrainer(output_home=args.output_home, k=args.k)
 
     # register dataset
-    trainer.register_dataset(
-        data_files=train_files,
-        mode='train',
-        dataset_type='class',
-        batch_size=args.batch_size,
-        model_name_or_path=args.model_path_or_name
-    )
+    # trainer.register_dataset(
+    #     data_files=train_files,
+    #     mode='train',
+    #     dataset_type='class',
+    #     batch_size=args.batch_size,
+    #     model_name_or_path=args.model_path_or_name
+    # )
 
     trainer.register_dataset(
         data_files=test_files,
@@ -124,8 +124,9 @@ def worker():
         mode=args.mode
     )
 
-    trainer.train(**vars(args))
-    trainer.inference(**vars(args))
+    # trainer.train(**vars(args))
+    trainer.valid_model_performance(**vars(args))
+    # trainer.inference(**vars(args))
 
 
 if __name__ == '__main__':

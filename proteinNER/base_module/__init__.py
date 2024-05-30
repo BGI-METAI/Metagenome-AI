@@ -5,4 +5,5 @@
 # @File    : __init__.py.py
 # @Email   : zhangchao5@genomics.cn
 from .dataset import CustomNERDataset, SequentialDistributedSampler
+from .dataset_CL import CustomNERDatasetCL, SequentialDistributedSampler
 from .base import BaseTrainer

@@ -21,6 +21,7 @@ from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 from safetensors import safe_open
 
+from proteinNER.base_module import CustomNERDatasetCL
 from proteinNER.base_module import CustomNERDataset
 from proteinNER.base_module.dataset import CustomPEFTEmbeddingDataset
 from proteinNER.classifier.model import ProtTransT5ForAAClassifier
@@ -46,10 +47,10 @@ class BaseTrainer(ABC):
 
         set_seed(kwargs.get('seed', 42))
         process_group_kwargs = InitProcessGroupKwargs(
-            timeout=timedelta(seconds=5400)
+            timeout=timedelta(seconds=54000)
         )  # 1.5 hours
         self.accelerator = Accelerator(
-            mixed_precision='fp16',
+            mixed_precision='fp16',# 混合精度，可能导致loss NAN
             log_with='wandb',
             gradient_accumulation_steps=kwargs.get('k', 1),
             kwargs_handlers=[process_group_kwargs]
@@ -151,6 +152,12 @@ class BaseTrainer(ABC):
                 legacy=legacy,
                 do_lower_case=do_lower_case
             )
+            # dataset = CustomNERDatasetCL(
+            #     processed_sequence_label_pairs_path=data_files,
+            #     tokenizer_model_name_or_path=model_name_or_path,
+            #     legacy=legacy,
+            #     do_lower_case=do_lower_case
+            # )
         elif dataset_type == 'embed':
             dataset = CustomPEFTEmbeddingDataset(
                 incremental_protein_sequence_path=data_files,
