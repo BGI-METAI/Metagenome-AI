@@ -33,7 +33,7 @@ class Transition(nn.Module):
         return output
 
     def post_process(self, emissions, predict):
-        probability_matrix = emissions.softmax(dim=-1)
+        probability_matrix = (emissions / 0.2).softmax(dim=-1)
         emissions_pred = probability_matrix.argmax(dim=-1)
         output = []
         for idx, pred in enumerate(predict):
@@ -56,12 +56,14 @@ class Transition(nn.Module):
                 if 0 in statistics.keys():
                     del statistics[0]
                 for key, val in statistics.items():
-                    if val < 5: continue
+                    if val < 50: continue
                     tmp = []
                     row, col = torch.where(t_pred == key)
                     for x, y in zip(row, t_pred[row]):
                         tmp.append(probability_matrix[idx][x, y])
                     prob[f'{key}'] = torch.tensor(tmp, device=t_pred.device, requires_grad=False).mean().item()
+                if len(prob) == 0:
+                    prob['0'] = 0.
                 emissions_label = emissions_pred[idx][:t_pred.size(0)].detach().cpu().tolist()
 
             output.append({

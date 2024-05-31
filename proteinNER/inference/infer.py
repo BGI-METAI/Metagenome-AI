@@ -7,16 +7,14 @@
 import socket
 import os
 import os.path as osp
-from abc import abstractmethod
-
 import torch
 import pickle
 
+from abc import abstractmethod
 from dataclasses import field
 from datetime import timedelta, datetime
 from pathlib import Path
 from typing import List
-
 from accelerate import Accelerator, InitProcessGroupKwargs
 from accelerate.utils import set_seed
 from torch.utils.data import DataLoader
@@ -37,6 +35,11 @@ class BaseInfer:
     id2labels: List = field(default=None)
 
     def __init__(self, **kwargs):
+        self.base_model_name_or_path = kwargs.get('model_name_or_path')
+        self.batch_size = kwargs.get('batch_size')
+        self.amino_acid_classifier_model_path = kwargs.get('amino_acid_classifier_model_path')
+        self.output_home = kwargs.get('output_home')
+
         set_seed(kwargs.get('seed', 42))
         process_group_kwargs = InitProcessGroupKwargs(
             timeout=timedelta(seconds=10800)
@@ -47,12 +50,13 @@ class BaseInfer:
             kwargs_handlers=[process_group_kwargs]
         )
         self.wandb_home = self.register_dir(
-            parent_path=kwargs.get('output_home', '.'),
+            parent_path=self.output_home,
             folder='tracker'
         )
-        self.base_model_name_or_path = kwargs.get('model_name_or_path')
-        self.batch_size = kwargs.get('batch_size')
-        self.amino_acid_classifier_model_path = kwargs.get('amino_acid_classifier_model_path')
+        self.pkls_home = self.register_dir(
+            parent_path=self.output_home,
+            folder='predict'
+        )
 
     def register_dir(self, parent_path, folder):
         new_path = osp.join(parent_path, folder)
@@ -124,16 +128,19 @@ class BaseInfer:
             self.label2ids.append(pickle.load(open(osp.join(ckpt_home, 'label2id.pkl'), 'rb')))
 
             trans_dict = torch.load(osp.join(ckpt_home, 'transition.bin'), map_location=torch.device('cuda'))
-            trans_trained_dict = {k.replace(k, f'multiheader.{idx}.transition.{k}'): v for k, v in trans_dict['state_dict'].items()
+            trans_trained_dict = {k.replace(k, f'multiheader.{idx}.transition.{k}'): v for k, v in
+                                  trans_dict['state_dict'].items()
                                   if k.replace(k, f'multiheader.{idx}.transition.{k}') in state_dict}
             state_dict.update(trans_trained_dict)
 
             crf_dict = torch.load(osp.join(ckpt_home, 'crf.bin'), map_location=torch.device('cuda'))
-            crf_trained_dict = {k.replace(k, f'multiheader.{idx}.crf.{k}'): v for k, v in crf_dict['state_dict'].items() if
+            crf_trained_dict = {k.replace(k, f'multiheader.{idx}.crf.{k}'): v for k, v in crf_dict['state_dict'].items()
+                                if
                                 k.replace(k, f'multiheader.{idx}.crf.{k}') in state_dict}
             state_dict.update(crf_trained_dict)
         self.model.load_state_dict(state_dict)
-        self.id2labels = [{str(v): k if k == 'O' else k.split('-')[1] for k, v in sub.items()} for sub in self.label2ids]
+        self.id2labels = [{str(v): k if k == 'O' else k.split('-')[1] for k, v in sub.items()} for sub in
+                          self.label2ids]
 
     @abstractmethod
     def inference(self, **kwargs):
@@ -154,18 +161,17 @@ class ProtTransAminoAcidClassifierInfer(BaseInfer):
         model.eval()
         batch_iter = tqdm(data_loader, desc=f'PID: {self.accelerator.process_index}')
 
-        results = []
-
         for idx, sample in enumerate(batch_iter):
             input_ids, attention_mask, protein_ids = sample
             predict = model(input_ids, attention_mask)
-            self.post_process(predict)
+            self.post_process(predict, protein_ids)
 
-    def post_process(self, predict, threshold=0.65):
+    def post_process(self, predict, protein_ids, *, threshold=0.65):
         rearrange = [list(row) for row in zip(*predict)]
-        for row in rearrange:
-            for idx, subhead in enumerate(row):
+        for idx, row in enumerate(rearrange):
+            temp = {}
+            for jdx, subhead in enumerate(row):
                 tag, prob = max(subhead['probability'].items(), key=lambda x: x[1])
-                pass
-
-
+                temp[f'header{jdx}'] = (self.id2labels[jdx][tag], prob)
+            with open(osp.join(self.pkls_home, f'{protein_ids[idx]}.pkl'), 'wb') as fp:
+                pickle.dump(temp, fp)
