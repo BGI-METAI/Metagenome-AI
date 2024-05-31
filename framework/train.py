@@ -36,7 +36,7 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.distributed import init_process_group, destroy_process_group
 import torch.distributed as dist
 
-from dataset import CustomDataset, TSVDataset, MaxTokensLoader, LoadStoredDataset
+from dataset import CustomDataset, TSVDataset, MaxTokensLoader
 from config import get_weights_file_path, ConfigProviderFactory
 from utils import check_gpu_used_memory
 
@@ -323,9 +323,9 @@ def train_classifier_from_stored_single_gpu(config):
     for epoch in range(config["num_epochs"]):
         current_loss = 0
         for batch in dataloader:
-            targets = batch['labels'].squeeze().to(device)
-            input = batch['emb'].to(device)
-            
+            targets = batch["labels"].squeeze().to(device)
+            input = batch["emb"].to(device)
+
             optimizer.zero_grad()
 
             outputs = classifier(input)
