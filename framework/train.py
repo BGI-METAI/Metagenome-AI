@@ -312,6 +312,10 @@ def train_classifier_from_stored_single_gpu(config):
         pin_memory=True,
     )
 
+    timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+    logger = init_logger(timestamp)
+    init_wandb(config["model_folder"], timestamp, classifier)
+
     # Or replace this part to be a part of the config as well
     llm = choose_llm(config)
     d_model = llm.get_embedding_dim()
@@ -321,7 +325,7 @@ def train_classifier_from_stored_single_gpu(config):
     loss_function = nn.BCEWithLogitsLoss()
 
     for epoch in range(config["num_epochs"]):
-        current_loss = 0
+        epoch_loss = 0
         for batch in dataloader:
             targets = batch["labels"].squeeze().to(device)
             input = batch["emb"].to(device)
@@ -332,11 +336,17 @@ def train_classifier_from_stored_single_gpu(config):
 
             loss = loss_function(outputs, targets)
 
+            loss.backward()
+
             optimizer.step()
 
-            current_loss += loss
-        current_loss /= len(dataloader)
-        wandb.log({"loss": current_loss})
+            wandb.log({"loss": loss})
+            epoch_loss += loss
+        epoch_loss /= len(dataloader)
+        wandb.log({"epoch_loss": epoch_loss})
+        # log some metrics on batches and some metrics only on epochs
+        # wandb.log({"batch": batch_idx, "loss": 0.3})
+        # wandb.log({"epoch": epoch, "val_acc": 0.94})
 
 
 def train_classifier(rank, config, world_size):
