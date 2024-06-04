@@ -13,40 +13,11 @@ from pathlib import Path
 import json
 
 
-class JSONConfigProvider:
-    def get_config(self):
-        raise NotImplementedError("Subclasses must implement get_config method")
-
-
-class ESMConfigProvider(JSONConfigProvider):
-    def get_config(self):
-        with open("framework/configs/config_esm.json") as file:
-            return json.load(file)
-
-
-class ProteinTransConfigProvider(JSONConfigProvider):
-    def get_config(self):
-        with open("framework/configs/config_protein_trans.json") as file:
-            return json.load(file)
-
-
-class ESMInferConfigProvider(JSONConfigProvider):
-    def get_config(self):
-        with open("framework/configs/config_esm_infer.json") as file:
-            return json.load(file)
-
-
 class ConfigProviderFactory:
     @staticmethod
-    def get_config_provider(config_type):
-        if config_type == "ESM":
-            return ESMConfigProvider()
-        elif config_type == "PTRANS":
-            return ProteinTransConfigProvider()
-        elif config_type == "ESM_infer":
-            return ESMInferConfigProvider()
-        else:
-            raise NotImplementedError("This type of config is not supported")
+    def get_config_provider(config_file):
+        with open(config_file) as file:
+            return json.load(file)
 
 
 def get_weights_file_path(config, epoch: str):
