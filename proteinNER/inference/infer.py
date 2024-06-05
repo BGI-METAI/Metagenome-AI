@@ -172,6 +172,7 @@ class ProtTransAminoAcidClassifierInfer(BaseInfer):
             temp = {}
             for jdx, subhead in enumerate(row):
                 tag, prob = max(subhead['probability'].items(), key=lambda x: x[1])
-                temp[f'header{jdx}'] = (self.id2labels[jdx][tag], prob)
+                # temp[f'header{jdx}'] = (self.id2labels[jdx][tag], prob)
+                temp[f'header{jdx}'] = (self.id2labels[jdx][tag], prob, subhead['crf_label'])
             with open(osp.join(self.pkls_home, f'{protein_ids[idx]}.pkl'), 'wb') as fp:
                 pickle.dump(temp, fp)

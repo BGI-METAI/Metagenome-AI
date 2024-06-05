@@ -33,7 +33,7 @@ class Transition(nn.Module):
         return output
 
     def post_process(self, emissions, predict):
-        probability_matrix = (emissions / 0.2).softmax(dim=-1)
+        probability_matrix = (emissions / 0.7).softmax(dim=-1)
         emissions_pred = probability_matrix.argmax(dim=-1)
         output = []
         for idx, pred in enumerate(predict):
@@ -49,7 +49,7 @@ class Transition(nn.Module):
                     tmp, device=t_pred.device, requires_grad=False).mean().item()
                 emissions_label = emissions_pred[idx][:t_pred.size(0)].detach().cpu().tolist()
             elif uniq_tag.size(0) == 0:
-                prob['0'] = 0.
+                prob['0'] = 1.
                 emissions_label = pred
             else:
                 statistics = Counter(pred)
@@ -63,13 +63,14 @@ class Transition(nn.Module):
                         tmp.append(probability_matrix[idx][x, y])
                     prob[f'{key}'] = torch.tensor(tmp, device=t_pred.device, requires_grad=False).mean().item()
                 if len(prob) == 0:
-                    prob['0'] = 0.
+                    prob['0'] = 1.
                 emissions_label = emissions_pred[idx][:t_pred.size(0)].detach().cpu().tolist()
 
             output.append({
                 'crf_label': pred,
                 'emission_label': emissions_label,
-                'probability': prob
+                'probability': prob,
+                'emission': emissions
             })
         return output
 

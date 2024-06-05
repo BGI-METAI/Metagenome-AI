@@ -9,6 +9,7 @@ import sys
 import random
 
 sys.path.insert(0, "..")
+sys.path.insert(0, "/home/share/huadjyin/home/zhangchao5/code/ProtT5")
 
 from proteinNER.classifier.model import ProtT5Conv1dCRF4AAClassifier
 from proteinNER.classifier.trainer import ProteinAANERTrainer

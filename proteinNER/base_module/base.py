@@ -22,11 +22,22 @@ from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 
 from proteinNER.base_module import CustomNERDataset
-from proteinNER.classifier.model import ProtTransT5ForAAClassifier
 
 
 class BaseTrainer(ABC):
-    model: Optional[Union[torch.nn.Module, ProtTransT5ForAAClassifier]] = field(default=None, metadata={
+    """
+    Base Trainer
+
+    Args:
+        output_home: str, the output home path
+        save_in_batch: bool, whether to save checkpoint in batch
+        seed: int, the random seed
+        k: int, the gradient accumulation steps
+        username: str, the wandb username
+        project: str, the wandb project name
+        group: str, the wandb group name
+    """
+    model: Optional[Union[torch.nn.Module]] = field(default=None, metadata={
         "help": "protein sequence AA classifier model"})
     train_loader: DataLoader = field(default=None, metadata={"help": "train loader"})
     test_loader: DataLoader = field(default=None, metadata={"help": "test loader"})
@@ -42,7 +53,6 @@ class BaseTrainer(ABC):
     accelerator: Accelerator = field(default=None)
 
     def __init__(self, **kwargs):
-
         set_seed(kwargs.get('seed', 42))
         process_group_kwargs = InitProcessGroupKwargs(
             timeout=timedelta(seconds=10800)
@@ -132,7 +142,6 @@ class BaseTrainer(ABC):
             **kwargs
     ):
         """
-
         :param data_files: pickle files path list of protein sequence
         :param label2id_path:
         :param mode: data loader type, optional, only support `train`, `test` and `valid`

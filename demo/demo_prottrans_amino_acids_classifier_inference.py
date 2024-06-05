@@ -5,6 +5,9 @@
 # @File    : demo_prottrans_amino_acids_classifier_inference.py
 # @Email   : zhangchao5@genomics.cn
 import argparse
+import sys
+
+sys.path.insert(0, "/home/share/huadjyin/home/zhangchao5/code/ProtT5")
 
 from proteinNER.inference.infer import ProtTransAminoAcidClassifierInfer
 
@@ -36,7 +39,7 @@ def worker():
             data_files.append(line.strip())
 
     infer = ProtTransAminoAcidClassifierInfer(
-        pairs_files=data_files[:10000],
+        pairs_files=data_files[:50000],
         **vars(args)
     )
     infer.inference()

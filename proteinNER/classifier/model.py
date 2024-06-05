@@ -9,65 +9,45 @@ from typing import List
 import torch
 import torch.nn as nn
 from torchcrf import CRF
-from peft import LoraConfig, get_peft_model
 from transformers import T5EncoderModel
 from collections import Counter
 
 
-class ProtTransT5EmbeddingPEFTModel(nn.Module):
-    def __init__(
-            self,
-            model_name_or_path,
-            lora_inference_mode=False,
-            lora_r=8,
-            lora_alpha=32,
-            lora_dropout=0.1
-    ):
-        super(ProtTransT5EmbeddingPEFTModel, self).__init__()
-        self.base_model = T5EncoderModel.from_pretrained(model_name_or_path)
-        peft_config = LoraConfig(
-            inference_mode=lora_inference_mode,
-            r=lora_r,
-            lora_alpha=lora_alpha,
-            lora_dropout=lora_dropout
-        )
-        self.lora_embedding = get_peft_model(self.base_model, peft_config)
-
-    def forward(self, input_ids, attention_mask):
-        return self.lora_embedding(input_ids, attention_mask).last_hidden_state
-
-
-class ProtTransT5ForAAClassifier(nn.Module):
-    def __init__(
-            self,
-            model_name_or_path,
-            num_classes,
-            lora_inference_mode=False,
-            lora_r=8,
-            lora_alpha=32,
-            lora_dropout=0.1,
-    ):
-        super(ProtTransT5ForAAClassifier, self).__init__()
-        self.embedding = ProtTransT5EmbeddingPEFTModel(
-            model_name_or_path=model_name_or_path,
-            lora_inference_mode=lora_inference_mode,
-            lora_r=lora_r,
-            lora_alpha=lora_alpha,
-            lora_dropout=lora_dropout
-        )
-        self.classifier = nn.Linear(self.embedding.lora_embedding.config.d_model, num_classes)
-
-    def forward(self, input_ids, attention_mask):
-        return self.classifier(self.embedding(input_ids, attention_mask))
-
-
 class TransitionModel(nn.Module):
+    """
+    Transition Model
+
+    Args:
+        in_channels: int, the number of input channels
+        hidden_channels: int, the number of hidden channels
+        out_channels: int, the number of output channels
+
+    Returns:
+        output: torch.Tensor, the output tensor
+    """
     def __init__(self, in_channels, hidden_channels, out_channels):
         super(TransitionModel, self).__init__()
         raise NotImplementedError
 
 
 class ProtT5Conv1dCRF4AAClassifier(nn.Module):
+    """
+    Protein T5 Conv1d CRF Classifier
+
+    Args:
+        model_name_or_path: str, the pre-trained model name or path
+        num_classes: int, the number of classes
+
+    Returns:
+        loss: torch.Tensor, the negative log likelihood loss
+
+    Examples:
+        model = ProtT5Conv1dCRF4AAClassifier(model_name_or_path='Rostlab/prot_t5_xl_uniref50', num_classes=21)
+        input_ids = torch.randint(0, 20, (2, 512))
+        attention_mask = torch.ones(2, 512)
+        labels = torch.randint(0, 21, (2, 512))
+        loss = model(input_ids, attention_mask, labels)
+    """
     def __init__(self, model_name_or_path, num_classes):
         super(ProtT5Conv1dCRF4AAClassifier, self).__init__()
         self.base_embedding = T5EncoderModel.from_pretrained(model_name_or_path)
@@ -137,3 +117,20 @@ class ProtT5Conv1dCRF4AAClassifier(nn.Module):
             })
         return output
 
+
+class ProteinDiscriminator(nn.Module):
+    """
+    Protein Discriminator
+
+    Args:
+        input_dims: int, input length of the predicted protein sequence
+
+    Returns:
+        output: torch.Tensor, the protein sequence is real or fake
+    """
+    def __init__(self, input_dims):
+        super(ProteinDiscriminator, self).__init__()
+        self.ly = nn.Linear(input_dims, 2)
+
+    def forward(self, x):
+        return self.ly(x)
