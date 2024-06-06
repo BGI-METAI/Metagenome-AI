@@ -1,0 +1,20 @@
+{
+    "path": "/home/ubuntu/MAI/Metagenome-AI/data/chunk100.txt",
+    "out_dir": "/home/ubuntu/MAI/Metagenome-AI/pfam_embeddings/esm_chunk100",
+    "only_store_embedings": false,
+    "emb_type": "ESM",
+    "max_tokens": 4000,
+     
+    "batch_size": 200,
+    "num_epochs": 2,
+    "lr": 1e-3,
+
+    "label": "label",
+    "sequence": "original",
+    "max_seq_len": null,
+    "model_folder": "weights",
+    "model_basename": "prot_model_",
+    "preload": null,
+    "experiment_name": "runs/esmSmall",
+    "wandb_key": "ba8ab5025007d1a06c3129ba630ed65767461de7" 
+}
