@@ -114,11 +114,10 @@ class DiscriminatorTrainer(BaseTrainer):
             data_files,
             **kwargs
     ):
-        self.batch_size = kwargs.get('batch_size', 1024)
-        max_length = kwargs.get('max_length', 250)
-        batch_size = kwargs.get('batch_size', 1024)
+        self.batch_size = kwargs.get('batch_size')
+        max_length = kwargs.get('max_length')
         dataset = DiscriminatorDataset(data_list=data_files, max_length=max_length)
-        self.train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=dataset.collate_fn)
+        self.train_loader = DataLoader(dataset, batch_size=self.batch_size, collate_fn=dataset.collate_fn)
 
     def save_ckpt(self, mode):
         if self.accelerator.main_process_first():
@@ -172,22 +171,24 @@ class DiscriminatorTrainer(BaseTrainer):
                 eph_loss.append(loss.item())
                 if self.save_in_batch and idx % CKPT_SAVE_STEP == 0:
                     self.save_ckpt('batch')
-                with self.accelerator.is_main_process:
+                with self.accelerator.main_process_first():
                     self.accelerator.log({'learning rate': self.optimizer.state_dict()['param_groups'][0]['lr']})
             self.lr_scheduler.step()
 
             if early_stopper(np.mean(eph_loss)):
                 if np.isnan(np.mean(eph_loss)):
                     self.accelerator.print(
-                        f"\n{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')} Model training ended unexpectedly!")
+                        f"\n{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')} \
+                        (PID: {self.accelerator.process_index}) Model training ended unexpectedly!")
 
                 self.accelerator.print(
-                    f"\nPid: {self.accelerator.process_index}: {datetime.now().strftime('%d_%m_%Y_%H_%M_%S')} Model Training Finished!")
+                    f"\nPID: {self.accelerator.process_index}: \
+                    {datetime.now().strftime('%d_%m_%Y_%H_%M_%S')} Model Training Finished!")
 
-                self.accelerator.wait_for_everyone()
                 with self.accelerator.main_process_first():
                     self.accelerator.print(
-                        f'\n\nPid: {self.accelerator.process_index}: The best `ckpt` file has saved in {self.best_ckpt_home}')
+                        f'\n\nPID: {self.accelerator.process_index}: \
+                        The best `ckpt` file has saved in {self.best_ckpt_home}')
                 self.accelerator.end_training()
                 break
             elif early_stopper.counter == 0:

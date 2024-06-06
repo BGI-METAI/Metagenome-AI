@@ -142,7 +142,7 @@ class DiscriminatorDataset(Dataset):
             batch_data.append(sample['data'])
             batch_label.append(sample['label'])
 
-        batch_data = torch.tensor(batch_data)
+        batch_data = torch.tensor(batch_data, dtype=torch.float)
         batch_label = torch.tensor(batch_label).flatten()
 
         return batch_data, batch_label
