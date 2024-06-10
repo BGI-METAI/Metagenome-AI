@@ -248,7 +248,7 @@ def store_embeddings(rank, config, world_size):
         device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
         Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
 
-        ds = TSVDataset(config["path"])
+        ds = TSVDataset(config["train"])
         max_tokens = config["max_tokens"]
         chunk_size = len(ds) // world_size
         remainder = len(ds) % world_size
@@ -285,7 +285,7 @@ def store_embeddings(rank, config, world_size):
         for batch in dataloader:
             try:
                 with torch.no_grad():
-                    llm.store_embeddings(batch, config["out_dir"])
+                    llm.store_embeddings(batch, config["emb_dir"])
             except RuntimeError as e:
                 if "out of memory" in str(e):
                     logger.error(
@@ -599,25 +599,22 @@ if __name__ == "__main__":
         description="Module that contains training and evaluation. Will be separated."
     )
     parser.add_argument(
-        "-e",
-        "--emb_type",
+        "-c",
+        "--config_path",
         help="Type of embedding to be used",
         type=str,
         required=False,
         default="ESM",
     )
-    parser.add_argument(
-        "-w",
-        "--wandb_key",
-        help="Wandb API key. If not supplied it is expected that you are already logged in on your machine",
-        type=str,
-        required=True,
-    )
+
     args = parser.parse_args()
-    wandb.login(key=args.wandb_key)
     warnings.filterwarnings("ignore")
-    config = ConfigProviderFactory.get_config_provider(args.emb_type)
+    config = ConfigProviderFactory.get_config_provider(args.config_path)
+    wandb.login(key=config["wandb_key"])
     world_size = torch.cuda.device_count()
-    # mp.spawn(train_classifier, args=(config, world_size), nprocs=world_size)
-    mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
-    # train_classifier_from_stored_single_gpu(config)
+
+    if "emb_dir" not in config.keys():
+        config["emb_dir"] = os.path.join(config["out_dir"], "stored_embeddings")
+        mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
+    if not config["only_store_embeddings"]:
+        train_classifier_from_stored_single_gpu(config)
