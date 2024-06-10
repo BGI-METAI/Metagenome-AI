@@ -26,6 +26,7 @@ import torch
 import torch.nn as nn
 from torch.utils import data
 from torch.optim.lr_scheduler import StepLR, LinearLR
+from torcheval.metrics import MultilabelAccuracy
 from tqdm import tqdm
 import wandb
 
@@ -67,7 +68,7 @@ def init_wandb(model_folder, timestamp, model=None):
     # initialize wandb tracker
     wandb_output_dir = os.path.join(model_folder, "wandb_home")
     Path(wandb_output_dir).mkdir(parents=True, exist_ok=True)
-    wandb.init(
+    run = wandb.init(
         project="protein function annotation",
         notes=socket.gethostname(),
         name=f"prot_func_anno_{timestamp}",
@@ -78,6 +79,8 @@ def init_wandb(model_folder, timestamp, model=None):
     )
     if model:
         wandb.watch(model, log="all")
+
+    return run
 
 
 # Initialize the PyTorch distributed backend
@@ -314,15 +317,17 @@ def train_classifier_from_stored_single_gpu(config):
 
     timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
     logger = init_logger(timestamp)
-    init_wandb(config["model_folder"], timestamp, classifier)
 
     # Or replace this part to be a part of the config as well
     llm = choose_llm(config)
     d_model = llm.get_embedding_dim()
 
     classifier = Classifier(d_model, ds.get_number_of_labels()).to(device)
+    run = init_wandb(config["model_folder"], timestamp, classifier)
+
     optimizer = torch.optim.Adam(classifier.parameters(), lr=config["lr"], eps=1e-9)
-    loss_function = nn.BCEWithLogitsLoss()
+    # loss_function = nn.BCEWithLogitsLoss()
+    loss_function = nn.CrossEntropyLoss()
 
     for epoch in range(config["num_epochs"]):
         epoch_loss = 0
@@ -340,13 +345,18 @@ def train_classifier_from_stored_single_gpu(config):
 
             optimizer.step()
 
-            wandb.log({"loss": loss})
             epoch_loss += loss
+            # metric = MultilabelAccuracy(criteria="hamming")
+            metric = MultilabelAccuracy()
+            metric.update(outputs, targets)
+            multilabel_acc = metric.compute()
+            wandb.log({"loss": loss, "multilabel_acc": multilabel_acc})
         epoch_loss /= len(dataloader)
         wandb.log({"epoch_loss": epoch_loss})
         # log some metrics on batches and some metrics only on epochs
         # wandb.log({"batch": batch_idx, "loss": 0.3})
         # wandb.log({"epoch": epoch, "val_acc": 0.94})
+    run.finish()
 
 
 def train_classifier(rank, config, world_size):

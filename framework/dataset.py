@@ -62,6 +62,9 @@ class TSVDataset(Dataset):
         if self.embeddings_dir is not None:
             with open(f"{self.embeddings_dir}/{prot_id}.pkl", "rb") as file_emb:
                 prot_emb = pickle.load(file_emb)
+        labels = torch.from_numpy(self.mlb.transform([sample[3:]])).to(torch.float32)
+        equal_probability = 1 / labels.count_nonzero()
+        labels[labels != 0] = equal_probability
         return {
             "protein_id": sample[0],
             "len": sample[1],
@@ -71,9 +74,7 @@ class TSVDataset(Dataset):
                 if self.embeddings_dir is not None
                 else None
             ),
-            "labels": torch.from_numpy(self.mlb.transform([sample[3:]])).to(
-                torch.float32
-            ),
+            "labels": labels,
         }
 
     def get_number_of_labels(self):
