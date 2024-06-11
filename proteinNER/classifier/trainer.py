@@ -59,6 +59,8 @@ class ProteinAANERTrainer(BaseTrainer):
                 batch_iterator.set_postfix({'Loss': f'{loss.item():.4f}'})
                 self.accelerator.log({'loss': loss.item()})
                 eph_loss.append(loss.item())
+
+                self.accelerator.wait_for_everyone()
                 if self.save_in_batch and idx % CKPT_SAVE_STEP == 0:
                     self.save_ckpt('batch')
 

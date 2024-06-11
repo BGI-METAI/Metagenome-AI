@@ -55,7 +55,7 @@ class BaseTrainer(ABC):
     def __init__(self, **kwargs):
         set_seed(kwargs.get('seed', 42))
         process_group_kwargs = InitProcessGroupKwargs(
-            timeout=timedelta(seconds=10800)
+            timeout=timedelta(days=1, seconds=10800)
         )
         self.accelerator = Accelerator(
             mixed_precision='fp16',
