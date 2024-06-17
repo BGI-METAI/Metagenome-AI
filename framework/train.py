@@ -111,6 +111,7 @@ class Classifier(nn.Module):
         super().__init__()
         if hidden_sizes is None:
             # Single fully connected layer for classification head
+            self.dropout = nn.Dropout(0.1)
             self.classifier = nn.Sequential(nn.Linear(d_model, num_classes))
         # Multiple hidden layers followed by a linear layer for classification head
         else:
@@ -124,6 +125,7 @@ class Classifier(nn.Module):
             self.classifier = nn.Sequential(*layers)
 
     def forward(self, x):
+        x = self.dropout(x)
         return self.classifier(x)
 
 
@@ -326,18 +328,21 @@ def train_classifier_from_stored_single_gpu(config):
     run = init_wandb(config["model_folder"], timestamp, classifier)
 
     optimizer = torch.optim.Adam(classifier.parameters(), lr=config["lr"], eps=1e-9)
+    scheduler = StepLR(optimizer, step_size=3, gamma=0.5)
+
     # loss_function = nn.BCEWithLogitsLoss()
     loss_function = nn.CrossEntropyLoss()
 
+    classifier.train()
     for epoch in range(config["num_epochs"]):
         epoch_loss = 0
         for batch in dataloader:
             targets = batch["labels"].squeeze().to(device)
-            input = batch["emb"].to(device)
+            embeddings = batch["emb"].to(device)
 
             optimizer.zero_grad()
 
-            outputs = classifier(input)
+            outputs = classifier(embeddings)
 
             loss = loss_function(outputs, targets)
 
@@ -348,10 +353,11 @@ def train_classifier_from_stored_single_gpu(config):
             epoch_loss += loss
             # metric = MultilabelAccuracy(criteria="hamming")
             metric = MultilabelAccuracy()
-            metric.update(outputs, targets)
+            metric.update(outputs, torch.where(targets > 0, 1, 0))
             multilabel_acc = metric.compute()
             wandb.log({"loss": loss, "multilabel_acc": multilabel_acc})
         epoch_loss /= len(dataloader)
+        scheduler.step()
         wandb.log({"epoch_loss": epoch_loss})
         # log some metrics on batches and some metrics only on epochs
         # wandb.log({"batch": batch_idx, "loss": 0.3})
