@@ -359,6 +359,17 @@ def train_classifier_from_stored_single_gpu(config):
         epoch_loss /= len(dataloader)
         scheduler.step()
         wandb.log({"epoch_loss": epoch_loss})
+        # Save model at the end of every epoch
+        model_filename = get_weights_file_path(config, f"{epoch:02d}")
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state_dict": classifier.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+            },
+            model_filename,
+        )
+        logging.warning(f"Finished epoch: {epoch}")
         # log some metrics on batches and some metrics only on epochs
         # wandb.log({"batch": batch_idx, "loss": 0.3})
         # wandb.log({"epoch": epoch, "val_acc": 0.94})
