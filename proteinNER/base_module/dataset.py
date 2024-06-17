@@ -118,3 +118,31 @@ class InferDataset(CustomNERDataset):
         attention_mask = torch.tensor(tokens['attention_mask'])
 
         return input_ids, attention_mask, batch_protein_id
+
+
+class DiscriminatorDataset(Dataset):
+    def __init__(self, data_list, max_length=250, **kwargs):
+        self.data_list = data_list
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.data_list)
+
+    def __getitem__(self, idx):
+        with open(self.data_list[idx], 'rb') as fp:
+            record = pickle.load(fp)
+            data = record['data']
+            data.extend([0] * (self.max_length - len(data)))
+        label = [1 if 'truth' in self.data_list[idx] else 0]
+        return {'data': data, 'label': label}
+
+    def collate_fn(self, batch_sample):
+        batch_data, batch_label = [], []
+        for sample in batch_sample:
+            batch_data.append(sample['data'])
+            batch_label.append(sample['label'])
+
+        batch_data = torch.tensor(batch_data, dtype=torch.float)
+        batch_label = torch.tensor(batch_label).flatten()
+
+        return batch_data, batch_label
