@@ -7,7 +7,6 @@
 import argparse
 import sys
 import random
-import os
 
 sys.path.insert(0, "..")
 
@@ -49,7 +48,6 @@ def register_parameters():
 
 
 def worker():
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
     args = register_parameters()
 
     # prepare dataset
@@ -79,7 +77,7 @@ def worker():
     )
 
     trainer.register_dataset(
-        data_files=test_files[:100000],
+        data_files=test_files[:10000],
         label2id_path=args.label2id_path,
         mode='test',
         dataset_type='class',

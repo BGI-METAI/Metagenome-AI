@@ -4,11 +4,14 @@
 # @Author  : zhangchao
 # @File    : model.py
 # @Email   : zhangchao5@genomics.cn
+from typing import List
+
 import torch
 import torch.nn as nn
 from torchcrf import CRF
 from peft import LoraConfig, get_peft_model
 from transformers import T5EncoderModel
+from collections import Counter
 
 
 class ProtTransT5EmbeddingPEFTModel(nn.Module):
@@ -88,8 +91,49 @@ class ProtT5Conv1dCRF4AAClassifier(nn.Module):
         return loss
 
     @torch.no_grad()
-    def inference(self, input_ids, attention_mask):
+    def inference(self, input_ids, attention_mask) -> List[dict]:
         embeddings = self.base_embedding(input_ids, attention_mask).last_hidden_state
-        embeddings = self.transition(embeddings.permute(0, 2, 1)).permute(0, 2, 1)
-        predict = self.crf.decode(embeddings, attention_mask.byte())
-        return predict
+        emissions = self.transition(embeddings.permute(0, 2, 1)).permute(0, 2, 1)
+        predict = self.crf.decode(emissions, attention_mask.byte())
+        output = self.post_process(emissions, predict)
+        return output
+
+    def post_process(self, emissions, predict) -> List[dict]:
+        probability_matrix = emissions.softmax(dim=-1)
+        emissions_pred = probability_matrix.argmax(dim=-1)
+        output = []
+
+        for idx, pred in enumerate(predict):
+            prob = {}
+            t_pred = torch.tensor(pred, device=self.base_embedding.device, requires_grad=False).unsqueeze(1)
+            row, col = torch.nonzero(t_pred, as_tuple=True)
+            uniq_tag = torch.unique(t_pred[row])
+            if 0 < uniq_tag.size(0) <= 2:
+                tmp = []
+                for x, y in zip(row, t_pred[row]):
+                    tmp.append(probability_matrix[idx][x, y])
+                prob[f'{uniq_tag[0].item()}'] = torch.tensor(tmp, device=t_pred.device, requires_grad=False).mean()
+                emissions_label = emissions_pred[idx][:t_pred.size(0)].detach().cpu().tolist()
+            elif uniq_tag.size(0) == 0:
+                prob['0'] = 0.
+                emissions_label = pred
+            else:
+                statistics = Counter(pred)
+                if 0 in statistics.keys():
+                    del statistics[0]
+                for key, val in statistics.items():
+                    if val < 5: continue
+                    tmp = []
+                    row, col = torch.where(t_pred == key)
+                    for x, y in zip(row, t_pred[row]):
+                        tmp.append(probability_matrix[idx][x, y])
+                    prob[f'{key}'] = torch.tensor(tmp, device=t_pred.device, requires_grad=False).mean()
+                emissions_label = emissions_pred[idx][:t_pred.size(0)].detach().cpu().tolist()
+
+            output.append({
+                'crf_label': pred,
+                'emission_label': emissions_label,
+                'probability': prob
+            })
+        return output
+
