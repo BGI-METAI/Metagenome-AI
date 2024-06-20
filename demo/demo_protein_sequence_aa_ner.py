@@ -9,7 +9,7 @@ import sys
 import random
 
 sys.path.insert(0, "..")
-sys.path.insert(0, "/home/share/huadjyin/home/zhangchao5/code/ProtT5")
+sys.path.insert(0, "/home/share/huadjyin/home/zhangkexin2/model/")
 
 from proteinNER.classifier.model import ProtT5Conv1dCRF4AAClassifier
 from proteinNER.classifier.trainer import ProteinAANERTrainer
@@ -32,7 +32,8 @@ def register_parameters():
     parser.add_argument('--patience', type=int, default=1)
     parser.add_argument('--k', type=int, default=100, help='Gradient accumulation parameters')
     parser.add_argument('--lr_decay_step', type=int, default=2, help='Period of learning rate decay')
-    parser.add_argument('--lr_decay_gamma', type=float, default=0.99, help='Multiplicative factor of learning rate decay')
+    parser.add_argument('--lr_decay_gamma', type=float, default=0.99,
+                        help='Multiplicative factor of learning rate decay')
     parser.add_argument('--reuse', action='store_true')
     parser.add_argument('--mode', default='best',
                         help='whether to load the optimal model, effective when reuse is true')
@@ -78,7 +79,7 @@ def worker():
     )
 
     trainer.register_dataset(
-        data_files=test_files[:10000],
+        data_files=test_files,
         label2id_path=args.label2id_path,
         mode='test',
         dataset_type='class',

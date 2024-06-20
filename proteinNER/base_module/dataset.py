@@ -131,9 +131,9 @@ class DiscriminatorDataset(Dataset):
     def __getitem__(self, idx):
         with open(self.data_list[idx], 'rb') as fp:
             record = pickle.load(fp)
-            data = record['data']
+            data = record['crf_label']
             data.extend([0] * (self.max_length - len(data)))
-        label = [1 if 'truth' in self.data_list[idx] else 0]
+        label = [0 if 'cross' in self.data_list[idx] else 1]
         return {'data': data, 'label': label}
 
     def collate_fn(self, batch_sample):

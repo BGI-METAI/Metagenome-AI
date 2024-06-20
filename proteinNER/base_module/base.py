@@ -74,7 +74,7 @@ class BaseTrainer(ABC):
         # wandb
         self.wandb_home = self.register_dir(output_home, 'wandb')
         # result
-        self.result_home = self.register_dir(output_home, 'train_cross_result')
+        self.result_home = self.register_dir(output_home, 'result')
 
     def register_dir(self, parent_path, folder):
         new_path = osp.join(parent_path, folder)

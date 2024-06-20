@@ -7,6 +7,10 @@
 # @Email   : zhangchao5@genomics.cn
 import argparse
 import random
+import sys
+
+sys.path.insert(0, "..")
+sys.path.insert(0, "/home/share/huadjyin/home/zhangkexin2/model/")
 
 from proteinNER.classifier.model import ProteinDiscriminator
 from proteinNER.classifier.trainer import DiscriminatorTrainer
@@ -14,7 +18,8 @@ from proteinNER.classifier.trainer import DiscriminatorTrainer
 
 def register_parameters():
     parser = argparse.ArgumentParser(description='Protein Sequence Predicted Results Discriminator')
-    parser.add_argument('--data_path', type=str, required=True, help='the path of input dataset')
+    parser.add_argument('--train_data_path', type=str, required=True, help='the path of input train dataset')
+    parser.add_argument('--test_data_path', type=str, required=True, help='the path of input test dataset')
     parser.add_argument('--output_home', type=str, required=True, help='the output data home')
     parser.add_argument('--seed', type=int, default=42, help='random seed')
 
@@ -32,7 +37,7 @@ def register_parameters():
     parser.add_argument('--is_trainable', action='store_true', help='whether the model should be trainable or not')
     parser.add_argument('--reuse', default=False)
 
-    parser.add_argument('--user_name', type=str, default='zhangchao162', help='wandb register parameter')
+    parser.add_argument('--user_name', type=str, default='kxzhang2000', help='wandb register parameter')
     parser.add_argument('--project', type=str, default='ProteinDiscriminator', help='wandb project name')
     parser.add_argument('--group', type=str, default='accelerate', help='wandb group')
 
@@ -42,15 +47,23 @@ def register_parameters():
 def worker():
     args = register_parameters()
 
-    data_files = []
-    with open(args.data_path, 'r') as fp:
+    train_data_files = []
+    with open(args.train_data_path, 'r') as fp:
         for line in fp.readlines():
-            data_files.append(line.strip())
+            train_data_files.append(line.strip())
     random.seed(args.seed)
-    random.shuffle(data_files)
+    random.shuffle(train_data_files)
+
+    test_data_files = []
+    with open(args.test_data_path, 'r') as fp:
+        for line in fp.readlines():
+            test_data_files.append(line.strip())
+    random.seed(args.seed)
+    random.shuffle(test_data_files)
 
     trainer = DiscriminatorTrainer(output_home=args.output_home, k=args.k)
-    trainer.register_dataset(data_files=data_files, batch_size=args.batch_size, max_length=args.max_length)
+    trainer.register_dataset(data_files=train_data_files, batch_size=args.batch_size, max_length=args.max_length, mode='train')
+    trainer.register_dataset(data_files=test_data_files, batch_size=args.batch_size, max_length=args.max_length,mode='test')
 
     model = ProteinDiscriminator(input_dims=args.max_length)
     trainer.register_model(
@@ -62,9 +75,11 @@ def worker():
         lr_decay_step=args.lr_decay_step,
         lr_decay_gamma=args.lr_decay_gamma
     )
-
-    trainer.print_trainable_parameters()
-    trainer.train(**vars(args))
+    if args.is_trainable:
+        trainer.print_trainable_parameters()
+        trainer.train(**vars(args))
+    else:
+        trainer.valid_model_performance()
 
 
 if __name__ == '__main__':

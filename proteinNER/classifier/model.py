@@ -107,7 +107,7 @@ class ProtT5Conv1dCRF4AAClassifier(nn.Module):
                     row, col = torch.where(t_pred == key)
                     for x, y in zip(row, t_pred[row]):
                         tmp.append(probability_matrix[idx][x, y])
-                    prob[f'{key}'] = torch.tensor(tmp, device=t_pred.device, requires_grad=False).mean()
+                    prob[f'{key}'] = torch.tensor(tmp, device=t_pred.device, requires_grad=False).mean().item()
                 emissions_label = emissions_pred[idx][:t_pred.size(0)].detach().cpu().tolist()
 
             output.append({

@@ -13,6 +13,8 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from datetime import datetime
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import precision_score, recall_score, f1_score
 
 from proteinNER.base_module import BaseTrainer
 from proteinNER.base_module.dataset import DiscriminatorDataset
@@ -102,7 +104,7 @@ class ProteinAANERTrainer(BaseTrainer):
             input_ids, attention_mask, batch_label, batch_protein_ids = sample
             results = model.module.inference(input_ids, attention_mask)
 
-            for cnt in range(self.batch_size):
+            for cnt in range(len(results)):
                 results[cnt].update({'ground_label': batch_label[cnt].detach().cpu().tolist()})
                 pickle.dump(results[cnt], open(osp.join(self.result_home, f'{batch_protein_ids[cnt]}.pkl'), 'wb'))
 
@@ -114,12 +116,18 @@ class DiscriminatorTrainer(BaseTrainer):
     def register_dataset(
             self,
             data_files,
+            mode,
             **kwargs
     ):
         self.batch_size = kwargs.get('batch_size')
         max_length = kwargs.get('max_length')
         dataset = DiscriminatorDataset(data_list=data_files, max_length=max_length)
-        self.train_loader = DataLoader(dataset, batch_size=self.batch_size, collate_fn=dataset.collate_fn)
+        if mode == 'train':
+            self.train_loader = DataLoader(dataset, batch_size=self.batch_size, collate_fn=dataset.collate_fn)
+        elif mode == 'test':
+            self.test_loader = DataLoader(dataset, batch_size=self.batch_size, collate_fn=dataset.collate_fn)
+        else:
+            raise ValueError('Got an invalid data loader mode, ONLY SUPPORT: `train` and `test`!')
 
     def save_ckpt(self, mode):
         if self.accelerator.main_process_first():
@@ -138,6 +146,26 @@ class DiscriminatorTrainer(BaseTrainer):
                 self.accelerator.save(state_dict, osp.join(self.best_ckpt_home, 'discriminator.bin'))
             else:
                 raise ValueError(f'Got an invalid mode: `{mode}`')
+
+    def load_ckpt(self, mode, is_trainable=False):
+        if mode == 'batch':
+            ckpt_home = self.batch_ckpt_home
+        elif mode in ['epoch', 'best']:
+            ckpt_home = self.best_ckpt_home
+        else:
+            raise ValueError('Got an invalid dataset mode, ONLY SUPPORT: `batch`, `epoch` or `best`')
+
+        if is_trainable:
+            trainer_ckpt = torch.load(osp.join(ckpt_home, 'discriminator_trainer.bin'),
+                                      map_location=torch.device('cuda'))
+            self.optimizer.load_state_dict(trainer_ckpt['optimizer'])
+            self.lr_scheduler.load_state_dict(trainer_ckpt['lr_scheduler'])
+
+        state_dict = self.model.state_dict()
+
+        discriminator_dict = torch.load(osp.join(ckpt_home, 'discriminator.bin'), map_location=torch.device('cuda'))
+
+        self.model.load_state_dict(discriminator_dict)
 
     def train(self, **kwargs):
         early_stopper = EarlyStopper(patience=kwargs.get('patience', 4))
@@ -197,5 +225,36 @@ class DiscriminatorTrainer(BaseTrainer):
                 self.save_ckpt(mode='best')
 
     @torch.no_grad()
+    def valid_model_performance(self, **kwargs):
+        pred_list, label_list = self.inference(*kwargs)
+        pred = torch.hstack(pred_list).cpu()
+        target = torch.hstack(label_list).cpu()
+        f1_value = f1_score(y_true=target, y_pred=pred)
+        acc_value = accuracy_score(y_true=target, y_pred=pred)
+        recall_value = recall_score(y_true=target, y_pred=pred)
+        pre_value = precision_score(y_true=target, y_pred=pred)
+        print(acc_value,pre_value,recall_value,f1_value)
+
+
+    @torch.no_grad()
     def inference(self, **kwargs):
-        pass
+        self.load_ckpt(mode='best')
+        self.model = self.accelerator.prepare_model(self.model)
+        self.test_loader = self.accelerator.prepare_data_loader(self.test_loader)
+
+        self.model.eval()
+
+        batch_iterator = tqdm(self.test_loader, desc=f'Pid: {self.accelerator.process_index}')
+
+        pred_list = []
+        label_list = []
+        for idx, sample in enumerate(batch_iterator):
+            data, label = sample
+            logist = self.model(data)
+            pred = F.softmax(logist, dim=-1).argmax(-1)
+            pred_list.append(pred)
+            label_list.append(label)
+        pred_gathered = self.accelerator.gather(pred_list)
+        label_gathered = self.accelerator.gather(label_list)
+
+        return pred_gathered, label_gathered
