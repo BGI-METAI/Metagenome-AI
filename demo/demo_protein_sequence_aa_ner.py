@@ -78,7 +78,7 @@ def worker():
     )
 
     trainer.register_dataset(
-        data_files=test_files[:100000],
+        data_files=test_files[:1000],
         label2id_path=args.label2id_path,
         mode='test',
         dataset_type='class',

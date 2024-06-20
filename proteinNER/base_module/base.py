@@ -192,8 +192,8 @@ class BaseTrainer(ABC):
         is_trainable = kwargs.get('is_trainable', True)
         self.learning_rate = kwargs.get('learning_rate', 1e-3)
         mode = kwargs.get('mode', 'best')
-        lr_decay_step = kwargs.get('lr_decay_step', 2)
-        lr_decay_gamma = kwargs.get('lr_decay_gamma', 0.99)
+        lr_decay_step = kwargs.get('lr_decay_step')
+        lr_decay_gamma = kwargs.get('lr_decay_gamma')
 
         self.model = model
         if is_trainable:
