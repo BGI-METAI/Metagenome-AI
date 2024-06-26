@@ -79,7 +79,7 @@ class ProtT5Conv1dCRF4AAClassifier(nn.Module):
         return output
 
     def post_process(self, emissions, predict) -> List[dict]:
-        probability_matrix = emissions.softmax(dim=-1)
+        probability_matrix = (emissions/0.01).softmax(dim=-1)
         emissions_pred = probability_matrix.argmax(dim=-1)
         output = []
 
@@ -92,7 +92,7 @@ class ProtT5Conv1dCRF4AAClassifier(nn.Module):
                 tmp = []
                 for x, y in zip(row, t_pred[row]):
                     tmp.append(probability_matrix[idx][x, y])
-                prob[f'{uniq_tag[0].item()}'] = torch.tensor(tmp, device=t_pred.device, requires_grad=False).mean()
+                prob[f'{uniq_tag[0].item()}'] = torch.tensor(tmp, device=t_pred.device, requires_grad=False).mean().item()
                 emissions_label = emissions_pred[idx][:t_pred.size(0)].detach().cpu().tolist()
             elif uniq_tag.size(0) == 0:
                 prob['0'] = 0.
@@ -118,6 +118,22 @@ class ProtT5Conv1dCRF4AAClassifier(nn.Module):
         return output
 
 
+class DiscriminatorLayer(nn.Module):
+    def __init__(self, input_dims, output_dims):
+        super(DiscriminatorLayer, self).__init__()
+        self.ly = nn.Linear(input_dims, output_dims)
+        self.bn = nn.BatchNorm1d(output_dims)
+        self.act = nn.ReLU()
+        self.drop = nn.Dropout(p=0.1)
+
+    def forward(self, x):
+        x = self.ly(x)
+        x = self.bn(x)
+        x = self.act(x)
+        x = self.drop(x)
+        return x
+
+
 class ProteinDiscriminator(nn.Module):
     """
     Protein Discriminator
@@ -130,7 +146,15 @@ class ProteinDiscriminator(nn.Module):
     """
     def __init__(self, input_dims):
         super(ProteinDiscriminator, self).__init__()
-        self.ly = nn.Linear(input_dims, 2)
+        self.net = nn.ModuleList()
+        for _ in range(4):
+            self.net.append(
+                DiscriminatorLayer(input_dims=input_dims, output_dims=input_dims)
+            )
+        self.out = nn.Linear(input_dims, 2)
 
     def forward(self, x):
-        return self.ly(x)
+        for idx, ly in enumerate(self.net):
+            x += ly(x)
+        out = self.out(x)
+        return out
