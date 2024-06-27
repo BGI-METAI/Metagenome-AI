@@ -33,9 +33,9 @@ class SequenceLabelEmbedding(nn.Module):
 
 class ProteinSequenceEmbedding(nn.Module):
     def __init__(self, model_name_or_path):
-        super(ProteinSequenceEmbedding).__init__()
+        super(ProteinSequenceEmbedding, self).__init__()
         self.embedding = T5EncoderModel.from_pretrained(model_name_or_path)
-        for k, v in self.base_embedding.named_parameters():
+        for k, v in self.embedding.named_parameters():
             v.requires_grad = False
 
     def forward(self, input_ids, attention_mask):
@@ -44,16 +44,16 @@ class ProteinSequenceEmbedding(nn.Module):
         return embedding
 
 
-class ProteinSeqEncoder(nn.Module):
-    def __init__(self, model_name_or_path, num_labels, label_embedding_dims=1024):
-        super().__init__()
-        self.sequence_embedding = ProteinSequenceEmbedding(model_name_or_path)
-        self.label_embedding = SequenceLabelEmbedding(num_embeddings=num_labels, embedding_dim=label_embedding_dims)
-
-    def forward(self, input_ids, attention_mask, labels):
-        seq_emd = self.sequence_embedding(input_ids, attention_mask)
-        lab_emd = self.label_embedding(labels)
-        return torch.concatenate((seq_emd, lab_emd), dim=0)
+# class ProteinSeqEncoder(nn.Module):
+#     def __init__(self, model_name_or_path, num_labels, label_embedding_dims=1024):
+#         super().__init__()
+#         self.sequence_embedding = ProteinSequenceEmbedding(model_name_or_path)
+#         self.label_embedding = SequenceLabelEmbedding(num_embeddings=num_labels, embedding_dim=label_embedding_dims)
+#
+#     def forward(self, input_ids, attention_mask, labels):
+#         seq_emd = self.sequence_embedding(input_ids, attention_mask)
+#         lab_emd = self.label_embedding(labels)
+#         return torch.concatenate((seq_emd, lab_emd), dim=0)
 
 
 
