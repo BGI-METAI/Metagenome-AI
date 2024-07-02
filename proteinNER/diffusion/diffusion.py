@@ -71,6 +71,22 @@ class SimpleDiffusion:
                 * noise
         )
 
+    def q_mean_variance(self, x_start, timestep):
+        """
+        Get the distribution q(x_t | x_0).
+
+        Args:
+            x_start: the [B x L x C] tensor of noiseless inputs.
+            timestep: the number of diffusion steps (minus 1). Here, 0 means one step.
+
+        Returns:
+            A tuple (mean, variance, log_variance), all of x_start's shape.
+        """
+        mean = self.extract_into_tensor(self.sqrt_alphas_cumprod, timestep, x_start.shape) * x_start
+        variance = self.extract_into_tensor(1.0 - self.alphas_cumprod, timestep, x_start.shape)
+        log_variance = self.extract_into_tensor(self.log_one_minus_alphas_cumprod, timestep, x_start.shape)
+        return mean, variance, log_variance
+
     def p_sample(self, model, x, timestep):
         """
         Sample x_{t-1} from the model at the given timestep.
@@ -187,3 +203,5 @@ class SimpleDiffusion:
             res = res[..., None]
         return res.expand(broadcast_shape)
 
+    def mean_flat(self, x):
+        return x.mean(dim=list(range(1, len(x.shape))))

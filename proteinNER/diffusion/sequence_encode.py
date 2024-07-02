@@ -44,16 +44,5 @@ class ProteinSequenceEmbedding(nn.Module):
         return embedding
 
 
-# class ProteinSeqEncoder(nn.Module):
-#     def __init__(self, model_name_or_path, num_labels, label_embedding_dims=1024):
-#         super().__init__()
-#         self.sequence_embedding = ProteinSequenceEmbedding(model_name_or_path)
-#         self.label_embedding = SequenceLabelEmbedding(num_embeddings=num_labels, embedding_dim=label_embedding_dims)
-#
-#     def forward(self, input_ids, attention_mask, labels):
-#         seq_emd = self.sequence_embedding(input_ids, attention_mask)
-#         lab_emd = self.label_embedding(labels)
-#         return torch.concatenate((seq_emd, lab_emd), dim=0)
-
 
 

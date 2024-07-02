@@ -49,19 +49,18 @@ class BetaSchedule:
 
 
 class TimestepScheduleSampler:
-    def __init__(self, diffusion):
-        self.diffusion = diffusion
+    def __init__(self, num_timestep):
+        self.num_timestep = num_timestep
 
     def weights(self):
-        return np.ones([self.diffusion.num_timesteps])
+        return np.ones([self.num_timestep])
 
-    def sample(self, batch_size, device):
+    def sample(self, batch_size):
         """
         Importance-sample timestep for a batch.
 
         Args:
             batch_size: the number of timestep.
-            device: the torch device to save to.
 
         Returns:
             a tuple (timestep, weight):
@@ -71,7 +70,7 @@ class TimestepScheduleSampler:
         w = self.weights()
         p = w / np.sum(w)
         indices_np = np.random.choice(len(p), size=(batch_size,), p=p)
-        indices = torch.from_numpy(indices_np).long().to(device)
+        indices = torch.from_numpy(indices_np).long()
         weights_np = 1 / (len(p) * p[indices_np])
-        weights = torch.from_numpy(weights_np).float().to(device)
+        weights = torch.from_numpy(weights_np).float()
         return indices, weights
