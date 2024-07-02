@@ -412,7 +412,7 @@ def train_classifier(rank, config, world_size):
         # which are all far more superior than a simple FC for their chosen tasks. So if you have the capacity
         # of adding multiple FCs, why not just add another attention block? On the other hand, the embeddings
         # from a decent model should have large inter-class distance and small intra-class variance, which could
-        #  easily be projected to their corresponding classes in a linear fashion, and a FC is more than enough.
+        # easily be projected to their corresponding classes in a linear fashion, and a FC is more than enough.
         # classifier = Classifier(d_model, num_classes).to(rank)
         classifier = Classifier(d_model, num_classes).to(rank)
         classifier = DDP(classifier, device_ids=[rank])
@@ -623,7 +623,7 @@ if __name__ == "__main__":
     wandb.login(key=config["wandb_key"])
     world_size = torch.cuda.device_count()
 
-    if "emb_dir" not in config.keys():
+    if "emb_dir" not in config.keys() or config["emb_dir"] is None:
         config["emb_dir"] = os.path.join(config["out_dir"], "stored_embeddings")
         mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
     if not config["only_store_embeddings"]:
