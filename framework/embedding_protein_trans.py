@@ -1,6 +1,8 @@
 import gc
 import re
 import logging
+import pickle
+import pathlib
 
 import numpy as np
 import torch
@@ -66,3 +68,24 @@ class ProteinTransEmbedding(Embedding):
         prottrans_embedding = prottrans_embedding.to(device) # padding adds one more caracter (insted od 512 it is 513)
         
         return(prottrans_embedding)
+
+    def store_embeddings(self, batch, out_dir):
+        """Store each protein embedding in a separate file named [protein_id].pkl
+
+        Only mean pooling is saved.
+
+        Args:
+            batch: Each sample contains protein_id and sequence
+        """
+        pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
+
+        embeddings = self.get_embedding(batch).cpu().numpy()
+
+        for protein_id, mean_emb in zip(
+            batch["protein_id"], embeddings
+        ):
+            embeddings_dict = {
+                "mean": mean_emb,
+            }
+            with open(f"{out_dir}/{protein_id}.pkl", "wb") as file:
+                pickle.dump(embeddings_dict, file)
