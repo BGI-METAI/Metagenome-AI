@@ -623,7 +623,7 @@ if __name__ == "__main__":
     wandb.login(key=config["wandb_key"])
     world_size = torch.cuda.device_count()
 
-    if "emb_dir" not in config.keys():
+    if "emb_dir" not in config.keys() or config["emb_dir"] is None:
         config["emb_dir"] = os.path.join(config["out_dir"], "stored_embeddings")
         mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
     if not config["only_store_embeddings"]:
