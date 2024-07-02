@@ -72,34 +72,20 @@ class ProteinTransEmbedding(Embedding):
     def store_embeddings(self, batch, out_dir):
         """Store each protein embedding in a separate file named [protein_id].pkl
 
-        Save all types of poolings such that each file has a [3, emb_dim]
-        where rows 0, 1, 2 are mean, max, cls pooled respectively
+        Only mean pooling is saved.
 
         Args:
             batch: Each sample contains protein_id and sequence
         """
         pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
-        data = [
-            (protein_id, seq)
-            for protein_id, seq in zip(batch["protein_id"], batch["sequence"])
-        ]
-        # batch_labels, _, batch_tokens = self.batch_converter(data)
-        # batch_tokens = batch_tokens.to(self.device)
-        # with torch.no_grad():
-        #     esm_result = self.model(batch_tokens)
 
-        # esm_result = esm_result["logits"].detach().cpu()
-        # mean_max_cls_embeddings = []
-        # mean_embeddings = self._pooling("mean", esm_result, batch_tokens)
-        # cls_embeddings = self._pooling("cls", esm_result, batch_tokens)
-
-        embeddings = self.get_embedding(batch)
+        embeddings = self.get_embedding(batch).cpu().numpy()
 
         for protein_id, mean_emb in zip(
             batch["protein_id"], embeddings
         ):
             embeddings_dict = {
-                "mean": mean_emb.cpu().numpy(),
+                "mean": mean_emb,
             }
             with open(f"{out_dir}/{protein_id}.pkl", "wb") as file:
                 pickle.dump(embeddings_dict, file)
