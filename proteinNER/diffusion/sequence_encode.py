@@ -9,6 +9,7 @@ import math
 import torch
 import torch.nn as nn
 from transformers import T5EncoderModel
+from transformers import AutoModel, AutoConfig
 
 
 class SequenceLabelEmbedding(nn.Module):
@@ -44,5 +45,18 @@ class ProteinSequenceEmbedding(nn.Module):
         return embedding
 
 
+class ProteinLabelEmbedding(nn.Module):
+    def __init__(self, pretrained_model_name_or_path):
+        super(ProteinLabelEmbedding, self).__init__()
+        config = AutoConfig.from_pretrained(pretrained_model_name_or_path)
+        self.base_embedding = AutoModel.from_config(config)
 
+    def forward(self, input_ids, attention_mask):
+        return self.base_embedding(input_ids, attention_mask)
+
+
+if __name__ == '__main__':
+    model_name_or_path = '/home/share/huadjyin/home/zhangchao5/weight/pfam'
+    model = ProteinLabelEmbedding(model_name_or_path)
+    print(model)
 

@@ -6,6 +6,9 @@
 # @Date    : 2024/7/2 14:13 
 # @Email   : zhangchao5@genomics.cn
 import argparse
+import sys
+sys.path.insert(0, "..")
+sys.path.insert(0, "/home/share/huadjyin/home/zhangchao5/code/ProtT5")
 
 from proteinNER.diffusion.diffusion_trainer import DiffusionProteinFuncTrainer
 
