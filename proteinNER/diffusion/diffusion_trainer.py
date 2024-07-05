@@ -8,17 +8,81 @@
 import random
 import os.path as osp
 
-import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from tqdm import tqdm
 
 from proteinNER.base_module.utils import EarlyStopper
+from proteinNER.diffusion.denoise_model import DenoiseModel
 from proteinNER.diffusion.diffusion import SimpleDiffusion
 from proteinNER.diffusion.schedule import BetaSchedule, TimestepScheduleSampler
-from proteinNER.diffusion.sequence_encode import ProteinSequenceEmbedding, SequenceLabelEmbedding
+from proteinNER.diffusion.sequence_encode import ProteinSequenceEmbedding, ProteinLabelEmbedding
 from proteinNER.diffusion.stack_atten import ProteinFuncAttention
 from proteinNER.base_module import BaseTrainer
+
+
+class DiffusionProteinModel(nn.Module):
+    def __init__(
+            self,
+            pretrianed_sequence_model_name_or_path,
+            base_label_model_name_or_path,
+            num_vocabs,
+            betas
+    ):
+        super(DiffusionProteinModel, self).__init__()
+        self.protein_seq_module = ProteinSequenceEmbedding(model_name_or_path=pretrianed_sequence_model_name_or_path)
+        self.label_seq_module = ProteinLabelEmbedding(
+            pretrained_model_name_or_path=base_label_model_name_or_path,
+            num_vocabs=num_vocabs)
+        self.diffusion = SimpleDiffusion(betas=betas)
+        self.denoise_module = DenoiseModel(
+            model_name_or_path=pretrianed_sequence_model_name_or_path,
+            num_classes=num_vocabs)
+
+    def forward(
+            self,
+            seq_input_ids,
+            seq_attention_mask,
+            raw_input_ids,
+            raw_attention_mask,
+            mask_input_ids,
+            mask_attention_mask,
+            timestep
+    ):
+        seq_embedding = self.protein_seq_module(seq_input_ids, seq_attention_mask)
+        raw_label_embedding = self.label_seq_module(raw_input_ids, raw_attention_mask)
+        mask_label_embedding = self.label_seq_module(mask_input_ids, mask_attention_mask)
+
+        # mask loss
+        mask_loss = F.cross_entropy(mask_label_embedding.permute(0, 2, 1), raw_input_ids)
+        # contrast loss
+        contr_loss = self.contrast_loss(embed_q=raw_label_embedding.detach(), embed_k=mask_label_embedding)
+
+        # forward diffusion
+        x_start = torch.cat((seq_embedding, raw_label_embedding), dim=1)
+        std = self.diffusion.extract_into_tensor(
+            self.diffusion.sqrt_one_minus_alphas_cumprod,
+            torch.tensor([0]).to(x_start.device),
+            x_start.shape
+        )
+        x_start += torch.randn_like(x_start) * std
+        x_start[:, :raw_label_embedding.size(1), :] = raw_label_embedding
+        x_t = self.diffusion.q_sample(x_start=x_start, timestep=timestep)
+        model_output = self.denoise_module(x_t, timestep)
+
+    def contrast_loss(self, embed_q, embed_k, tau=0.07):
+        assert embed_q.size() == embed_k.size()
+        B, L, C = embed_q.size()
+        embed_q = embed_q.view(B, -1)
+        embed_k = embed_k.view(B, -1)
+
+        sim_matrix = torch.einsum('ik, jk -> ij', embed_q, embed_k) / torch.einsum(
+            'i, j -> ij', embed_q.norm(p=2, dim=1), embed_k.norm(p=2, dim=1)
+        )
+        label = torch.arange(sim_matrix.size(0), device=sim_matrix.device)
+        loss = torch.nn.functional.cross_entropy(sim_matrix / tau, label)
+        return loss
 
 
 class DiffusionProteinFuncModel(nn.Module):
@@ -202,4 +266,3 @@ class DiffusionProteinFuncTrainer(BaseTrainer):
 
     def inference(self, **kwargs):
         pass
-
