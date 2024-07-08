@@ -29,6 +29,7 @@ from torch.optim.lr_scheduler import StepLR, LinearLR
 from torcheval.metrics import MultilabelAccuracy
 from tqdm import tqdm
 import wandb
+import time
 
 # Enable Multi-GPU training
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -287,6 +288,8 @@ def store_embeddings(rank, config, world_size):
             init_wandb(config["model_folder"], timestamp)
 
         dist.barrier()
+
+        start_time = time.time()
         for batch in dataloader:
             try:
                 with torch.no_grad():
@@ -299,6 +302,9 @@ def store_embeddings(rank, config, world_size):
                     logger.error(batch["protein_id"])
                     torch.cuda.empty_cache()
                     print("Cuda was out of memory, recovering...")
+
+        end_time = time.time()
+        print(f"Elapsed time: {end_time - start_time}")
         # Resource cleanup
     finally:
         destroy_process_group()
