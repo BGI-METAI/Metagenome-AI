@@ -458,11 +458,11 @@ def train_classifier_from_stored_single_gpu(config):
 
         if test_ds.get_number_of_labels() > 2:
             multilabel_acc = multilabel_acc / len(test_dataloader)
-            logger.info(f"[TEST SET] Multilabel accuracy: {acc:.2f}")
+            logger.info(f"[TEST SET] Multilabel accuracy: {acc*100:.2f}%")
         else:
             acc = acc / len(test_dataloader)
             f1 = f1 / len(test_dataloader)
-            logger.info(f"[TEST SET] Accuracy: {acc:.2f} F1: {f1:.2f}")
+            logger.info(f"[TEST SET] Accuracy: {acc*100:.2f}% F1: {f1*100:.2f}%")
     run.finish()
 
 
