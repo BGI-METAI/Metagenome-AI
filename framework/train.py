@@ -204,7 +204,10 @@ def choose_llm(config):
     if config["emb_type"] == "ESM":
         return EsmEmbedding()
     elif config["emb_type"] == "PTRANS":
-        return ProteinTransEmbedding(model_name=config["prot_trans_model_name"])
+        if "prot_trans_model_path" not in config.keys() or config["prot_trans_model_path"] is None:
+            return ProteinTransEmbedding(model_name=config["prot_trans_model_name"])
+        else:
+            return ProteinTransEmbedding(model_name=config["prot_trans_model_path"], read_from_files = True)
     elif config["emb_type"] == "PVEC":
         return ProteinVecEmbedding()
     else:
@@ -254,7 +257,7 @@ def store_embeddings(rank, config, world_size):
         device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
         Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
 
-        ds = TSVDataset(config["train"])
+        ds = TSVDataset(config["path"])
         max_tokens = config["max_tokens"]
         chunk_size = len(ds) // world_size
         remainder = len(ds) % world_size
