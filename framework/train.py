@@ -307,7 +307,7 @@ def store_embeddings(rank, config, world_size):
                     print("Cuda was out of memory, recovering...")
 
         end_time = time.time()
-        print(f"Elapsed time: {end_time - start_time}")
+        print(f"Elapsed time: {(end_time - start_time)/60} min")
         # Resource cleanup
     finally:
         destroy_process_group()
