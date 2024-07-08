@@ -4,5 +4,5 @@
 # @Author  : zhangchao
 # @File    : __init__.py.py
 # @Email   : zhangchao5@genomics.cn
-from .dataset import CustomNERDataset
+from .dataset import CustomNERDataset, CustomGODataset
 from .base import BaseTrainer

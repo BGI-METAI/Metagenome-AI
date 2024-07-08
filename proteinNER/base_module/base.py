@@ -14,6 +14,7 @@ from pathlib import Path
 from datetime import timedelta, datetime
 from typing import Optional, Union
 from functools import partial
+from safetensors import safe_open
 
 from accelerate import Accelerator, InitProcessGroupKwargs
 from accelerate.utils import set_seed
@@ -21,7 +22,7 @@ from torch.optim.lr_scheduler import LRScheduler
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 
-from proteinNER.base_module import CustomNERDataset
+from proteinNER.base_module import CustomNERDataset, CustomGODataset
 
 
 class BaseTrainer(ABC):
@@ -51,6 +52,7 @@ class BaseTrainer(ABC):
     is_trainable: bool = field(default=True, metadata={"help": "whether the model to be train or not"})
     reuse: bool = field(default=False, metadata={"help": "whether the model parameters to be reuse or not"})
     accelerator: Accelerator = field(default=None)
+    label2id_path: str = field(default=None, metadata={"help": "the path of label to id path"})
 
     def __init__(self, **kwargs):
         set_seed(kwargs.get('seed', 42))
@@ -163,6 +165,14 @@ class BaseTrainer(ABC):
                 legacy=legacy,
                 do_lower_case=do_lower_case
             )
+        elif dataset_type == 'GO':
+            dataset = CustomGODataset(
+                processed_sequence_label_pairs_path=data_files,
+                label2id_path=label2id_path,
+                tokenizer_model_name_or_path=model_name_or_path,
+                legacy=legacy,
+                do_lower_case=do_lower_case
+            )
         elif dataset_type == 'embed':
             raise NotImplementedError
         else:
@@ -210,21 +220,34 @@ class BaseTrainer(ABC):
                 "optimizer": self.optimizer.state_dict(),
                 "lr_scheduler": self.lr_scheduler.state_dict(),
             }
-            transition_state_dict = {"state_dict": unwrapped_model.transition.state_dict()}
-            crf_state_dict = {"state_dict": unwrapped_model.crf.state_dict()}
+            # transition_state_dict = {"state_dict": unwrapped_model.transition.state_dict()}
+            # crf_state_dict = {"state_dict": unwrapped_model.crf.state_dict()}
+            #
+            # if mode == 'batch':
+            #     self.accelerator.save(trainer_dict, osp.join(self.batch_ckpt_home, 'trainer.bin'))
+            #     self.accelerator.save(transition_state_dict, osp.join(self.batch_ckpt_home, 'transition.bin'))
+            #     self.accelerator.save(crf_state_dict, osp.join(self.batch_ckpt_home, 'crf.bin'))
+            #
+            # elif mode in ['epoch', 'best']:
+            #     self.accelerator.save(trainer_dict, osp.join(self.best_ckpt_home, 'trainer.bin'))
+            #     self.accelerator.save(transition_state_dict, osp.join(self.best_ckpt_home, 'transition.bin'))
+            #     self.accelerator.save(crf_state_dict, osp.join(self.best_ckpt_home, 'crf.bin'))
+            # else:
+            #     raise ValueError('Got an invalid dataset mode, ONLY SUPPORT: `batch`, `epoch` or `best`')
+
+            state_dict = unwrapped_model.state_dict()
 
             if mode == 'batch':
                 self.accelerator.save(trainer_dict, osp.join(self.batch_ckpt_home, 'trainer.bin'))
-                self.accelerator.save(transition_state_dict, osp.join(self.batch_ckpt_home, 'transition.bin'))
-                self.accelerator.save(crf_state_dict, osp.join(self.batch_ckpt_home, 'crf.bin'))
+                self.accelerator.save(state_dict, osp.join(self.batch_ckpt_home, 'model.bin'))
+                unwrapped_model.lora_embedding.save_pretrained(self.batch_ckpt_home)
 
             elif mode in ['epoch', 'best']:
                 self.accelerator.save(trainer_dict, osp.join(self.best_ckpt_home, 'trainer.bin'))
-                self.accelerator.save(transition_state_dict, osp.join(self.best_ckpt_home, 'transition.bin'))
-                self.accelerator.save(crf_state_dict, osp.join(self.best_ckpt_home, 'crf.bin'))
+                self.accelerator.save(state_dict, osp.join(self.best_ckpt_home, 'model.bin'))
+                unwrapped_model.lora_embedding.save_pretrained(self.best_ckpt_home)
             else:
                 raise ValueError('Got an invalid dataset mode, ONLY SUPPORT: `batch`, `epoch` or `best`')
-
     def load_ckpt(self, mode, is_trainable=False):
         if mode == 'batch':
             ckpt_home = self.batch_ckpt_home
@@ -238,19 +261,35 @@ class BaseTrainer(ABC):
             self.optimizer.load_state_dict(trainer_ckpt['optimizer'])
             self.lr_scheduler.load_state_dict(trainer_ckpt['lr_scheduler'])
 
-        state_dict = self.model.state_dict()
+        # state_dict = self.model.state_dict()
+        #
+        # transition_dict = torch.load(osp.join(ckpt_home, 'transition.bin'), map_location=torch.device('cuda'))
+        # transition_trained_dict = {k.replace(k, f'transition.{k}'): v for k, v in transition_dict['state_dict'].items()
+        #                            if k.replace(k, f'transition.{k}') in state_dict}
+        # state_dict.update(transition_trained_dict)
+        #
+        # crf_dict = torch.load(osp.join(ckpt_home, 'crf.bin'), map_location=torch.device('cuda'))
+        # crf_trained_dict = {k.replace(k, f'crf.{k}'): v for k, v in crf_dict['state_dict'].items() if
+        #                     k.replace(k, f'crf.{k}') in state_dict}
+        # state_dict.update(crf_trained_dict)
+        #
+        # self.model.load_state_dict(state_dict)
 
-        transition_dict = torch.load(osp.join(ckpt_home, 'transition.bin'), map_location=torch.device('cuda'))
-        transition_trained_dict = {k.replace(k, f'transition.{k}'): v for k, v in transition_dict['state_dict'].items()
-                                   if k.replace(k, f'transition.{k}') in state_dict}
-        state_dict.update(transition_trained_dict)
+        self.model.load_state_dict(torch.load(osp.join(ckpt_home, 'model.bin'), map_location=torch.device('cuda')))
 
-        crf_dict = torch.load(osp.join(ckpt_home, 'crf.bin'), map_location=torch.device('cuda'))
-        crf_trained_dict = {k.replace(k, f'crf.{k}'): v for k, v in crf_dict['state_dict'].items() if
-                            k.replace(k, f'crf.{k}') in state_dict}
-        state_dict.update(crf_trained_dict)
+        lora_weight_tensor = {}
+        with safe_open(osp.join(ckpt_home, 'adapter_model.safetensors'), framework='pt') as file:
+            for key in file.keys():
+                lora_weight_tensor[key.replace('weight', 'default.weight')] = file.get_tensor(key)
 
-        self.model.load_state_dict(state_dict)
+        for name, weight in self.model.lora_embedding.named_parameters():
+            if name not in lora_weight_tensor.keys():
+                continue
+            if weight.requires_grad:
+                assert weight.data.size() == lora_weight_tensor[name].size(), f'Got an invalid key: `{name}`!'
+                weight.data.copy_(lora_weight_tensor[name])
+                if not is_trainable:
+                    weight.requires_grad = False
 
     def print_trainable_parameters(self):
         total = 0

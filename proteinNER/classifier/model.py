@@ -11,6 +11,7 @@ import torch.nn as nn
 from torchcrf import CRF
 from transformers import T5EncoderModel
 from collections import Counter
+from peft import LoraConfig, get_peft_model
 
 
 class TransitionModel(nn.Module):
@@ -116,6 +117,39 @@ class ProtT5Conv1dCRF4AAClassifier(nn.Module):
                 'probability': prob
             })
         return output
+
+
+class ProtT5MLPClassifier(nn.Module):
+    def __init__(
+            self,
+            model_name_or_path,
+            num_classes,
+            lora_inference_mode=False,
+            lora_r=8,
+            lora_alpha=32,
+            lora_dropout=0.1):
+        super(ProtT5MLPClassifier, self).__init__()
+        self.base_model = T5EncoderModel.from_pretrained(model_name_or_path)
+        peft_config = LoraConfig(
+            inference_mode=lora_inference_mode,
+            r=lora_r,
+            lora_alpha=lora_alpha,
+            lora_dropout=lora_dropout
+        )
+        self.lora_embedding = get_peft_model(self.base_model, peft_config)
+        self.classifier = nn.Linear(self.lora_embedding.config.d_model, num_classes)
+
+
+    def forward(self, input_ids, attention_mask):
+        embeddings = self.lora_embedding(input_ids, attention_mask).last_hidden_state
+        seq_embeddings = torch.sum(embeddings, dim=1) # mean
+        logist = self.classifier(seq_embeddings)
+        return logist
+
+    @torch.no_grad()
+    def inference(self, input_ids, attention_mask):
+        pass
+
 
 
 class DiscriminatorLayer(nn.Module):

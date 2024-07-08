@@ -88,6 +88,82 @@ class CustomNERDataset(Dataset):
             return sequence
 
 
+class CustomGODataset(Dataset):
+    def __init__(
+            self,
+            processed_sequence_label_pairs_path: List[str],
+            label2id_path: str,
+            tokenizer_model_name_or_path: str,
+            **kwargs
+    ):
+        self.pairs_path = processed_sequence_label_pairs_path
+        self.tokenizer = T5Tokenizer.from_pretrained(tokenizer_model_name_or_path, **kwargs)
+        self.label2id = pickle.load(open(label2id_path, 'rb'))
+
+    def __len__(self):
+        return len(self.pairs_path)
+
+    def __getitem__(self, idx):
+        with open(self.pairs_path[idx], 'rb') as file:
+            data = pickle.load(file)
+        label = []
+        for tag in data['GO_label']:
+            label.append(self.label2id[tag])
+        return {'seq': data['seq'][:250], 'label': torch.tensor(label),
+                'protein_id': osp.splitext(osp.basename(self.pairs_path[idx]))[0]}
+
+    def collate_fn(self, batch_sample, is_valid):
+        batch_seq, batch_label, batch_protein_id = [], [], []
+        for sample in batch_sample:
+            batch_seq.append(sample['seq'])
+            batch_label.append(sample['label'])
+            batch_protein_id.append(sample['protein_id'])
+        batch_seq = self.prepare_sequence(batch_seq)
+        tokens = self.tokenizer.batch_encode_plus(
+            batch_text_or_text_pairs=batch_seq,
+            padding='longest',
+            add_special_tokens=False
+        )
+        input_ids = torch.tensor(tokens['input_ids'])
+        attention_mask = torch.tensor(tokens['attention_mask'])
+        batch_label = self.convert_label(batch_label)
+
+        return input_ids, attention_mask, batch_label, batch_protein_id
+
+    @staticmethod
+    def prepare_sequence(
+            sequence: Optional[Union[str, List[str]]],
+            add_separator: bool = True
+    ) -> List[str]:
+        """
+        prepare protein sequence, add a space separator between each amino acid character and replace rare amino acids with `X`.
+
+        :param sequence:
+            amino acid sequences
+        :param add_separator:
+            whether to add space delimiters to each sequence. default is True.
+        :return:
+        """
+        if isinstance(sequence, List):
+            sequence = [re.sub(r'[UZOB]', 'X', seq) for seq in sequence]
+
+        elif isinstance(sequence, str):
+            sequence = [re.sub(r'[UZOB]', 'X', sequence)]
+        else:
+            raise ValueError('Error: Got an invalid protein sequence!')
+
+        if add_separator:
+            return [' '.join(list(seq)) for seq in sequence]
+        else:
+            return sequence
+
+    def convert_label(self,label_list):
+        batch_label = torch.zeros([len(label_list),len(self.label2id)])
+        for i in range(len(label_list)):
+            for j in label_list[i]:
+                batch_label[i][j] = 1
+        return batch_label
+
 class InferDataset(CustomNERDataset):
     def __init__(
             self,
@@ -133,16 +209,20 @@ class DiscriminatorDataset(Dataset):
             record = pickle.load(fp)
             data = record['crf_label']
             data.extend([0] * (self.max_length - len(data)))
-        label = [0 if 'cross' in self.data_list[idx] else 1]
-        return {'data': data, 'label': label}
+        # label = [0 if 'cross' in self.data_list[idx] else 1]
+        file_name = self.data_list[idx]
+        label = [1 if file_name.split('.')[-2] == file_name.split('.')[-3] else 0]
+        return {'data': data, 'label': label, 'protein_id': [record['id']]}
 
     def collate_fn(self, batch_sample):
-        batch_data, batch_label = [], []
+        batch_data, batch_label,batch_id = [], [], []
         for sample in batch_sample:
             batch_data.append(sample['data'])
             batch_label.append(sample['label'])
+            batch_id.append(sample['protein_id'])
 
         batch_data = torch.tensor(batch_data, dtype=torch.float)
         batch_label = torch.tensor(batch_label).flatten()
+        batch_id = torch.tensor(batch_id).flatten()
 
-        return batch_data, batch_label
+        return batch_data, batch_label, batch_id

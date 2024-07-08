@@ -11,8 +11,8 @@ import random
 sys.path.insert(0, "..")
 sys.path.insert(0, "/home/share/huadjyin/home/zhangkexin2/model/")
 
-from proteinNER.classifier.model import ProtT5Conv1dCRF4AAClassifier
-from proteinNER.classifier.trainer import ProteinAANERTrainer
+from proteinNER.classifier.model import ProtT5MLPClassifier
+from proteinNER.classifier.train_go import ProteinAANERTrainer
 
 
 def register_parameters():
@@ -73,7 +73,7 @@ def worker():
         data_files=train_files,
         label2id_path=args.label2id_path,
         mode='train',
-        dataset_type='class',
+        dataset_type='GO',
         batch_size=args.batch_size,
         model_name_or_path=args.model_path_or_name
     )
@@ -82,13 +82,13 @@ def worker():
         data_files=test_files,
         label2id_path=args.label2id_path,
         mode='test',
-        dataset_type='class',
+        dataset_type='GO',
         batch_size=args.batch_size,
         is_valid=args.is_valid,
         model_name_or_path=args.model_path_or_name
     )
 
-    model = ProtT5Conv1dCRF4AAClassifier(model_name_or_path=args.model_path_or_name, num_classes=args.num_classes)
+    model = ProtT5MLPClassifier(model_name_or_path=args.model_path_or_name, num_classes=args.num_classes)
     trainer.register_model(
         model=model,
         reuse=args.reuse,
@@ -103,7 +103,7 @@ def worker():
         trainer.print_trainable_parameters()
         trainer.train(**vars(args))
     else:
-        trainer.valid_model_performance()
+        trainer.valid_model_performance(**vars(args))
 
 
 if __name__ == '__main__':

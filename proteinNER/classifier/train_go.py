@@ -8,6 +8,7 @@ import torch
 import pickle
 import os.path as osp
 import numpy as np
+import torch.nn as nn
 import torch.nn.functional as F
 
 from torch.utils.data import DataLoader
@@ -18,7 +19,8 @@ from sklearn.metrics import precision_score, recall_score, f1_score
 
 from proteinNER.base_module import BaseTrainer
 from proteinNER.base_module.dataset import DiscriminatorDataset
-from proteinNER.base_module.utils import EarlyStopper
+from proteinNER.base_module.utils import EarlyStopper, EvalMetrics
+from proteinNER.classifier.loss_fn import FocalLoss
 
 CKPT_SAVE_STEP = 10
 
@@ -31,6 +33,9 @@ class ProteinAANERTrainer(BaseTrainer):
         self.loss_weight = kwargs.get('loss_weight', 1.)
 
         early_stopper = EarlyStopper(patience=kwargs.get('patience', 4))
+        # loss_fn = nn.CrossEntropyLoss()
+        loss_fn = FocalLoss(logits=True)
+        # loss_fn = nn.BCEWithLogitsLoss(size_average=True)
         self.register_wandb(
             user_name=kwargs.get('username'),
             project_name=kwargs.get('project'),
@@ -50,10 +55,11 @@ class ProteinAANERTrainer(BaseTrainer):
                 Eph: {eph:03d} ({early_stopper.counter} / {early_stopper.patience})')
             eph_loss = []
             for idx, sample in enumerate(batch_iterator):
-                input_ids, attention_mask, batch_label = sample
+                input_ids, attention_mask, batch_label, _ = sample
                 with self.accelerator.accumulate(self.model):
+                    logist = self.model(input_ids, attention_mask)
                     with self.accelerator.autocast():
-                        loss = self.model(input_ids, attention_mask, batch_label.long())
+                        loss = loss_fn(logist,batch_label)
                     self.accelerator.backward(loss)
                     self.optimizer.step()
                     self.optimizer.zero_grad()
@@ -89,7 +95,12 @@ class ProteinAANERTrainer(BaseTrainer):
 
     @torch.no_grad()
     def valid_model_performance(self, **kwargs):
-        self.inference(*kwargs)
+        label2id_path = kwargs.get('label2id_path')
+        eval_metric = EvalMetrics(label2id_path=label2id_path)
+        preds, targets = self.inference(**kwargs)
+        avg_auc, fmax, tmax, aupr = eval_metric(preds, targets)
+        print('evaluation metrics', avg_auc, fmax, tmax, aupr)
+
 
     @torch.no_grad()
     def inference(self, **kwargs):
@@ -100,13 +111,27 @@ class ProteinAANERTrainer(BaseTrainer):
 
         batch_iterator = tqdm(data_loader, desc=f'Pid: {self.accelerator.process_index}')
 
+        preds=[]
+        targets=[]
         for idx, sample in enumerate(batch_iterator):
             input_ids, attention_mask, batch_label, batch_protein_ids = sample
-            results = model.module.inference(input_ids, attention_mask)
+            # results = model.module.inference(input_ids, attention_mask)
+            #
+            # for cnt in range(len(results)):
+            #     results[cnt].update({'ground_label': batch_label[cnt].detach().cpu().tolist()})
+            #     pickle.dump(results[cnt], open(osp.join(self.result_home, f'{batch_protein_ids[cnt]}.pkl'), 'wb'))
+            logist = self.model(input_ids, attention_mask)
+            pred = torch.sigmoid(logist)
+            preds.append(pred)
+            targets.append(batch_label)
+        preds = self.accelerator.gather(preds)
+        targets = self.accelerator.gather(targets)
+        preds = torch.vstack(preds).detach().cpu().numpy()
+        targets = torch.vstack(targets).detach().cpu().numpy()
+        return preds, targets
 
-            for cnt in range(len(results)):
-                results[cnt].update({'ground_label': batch_label[cnt].detach().cpu().tolist()})
-                pickle.dump(results[cnt], open(osp.join(self.result_home, f'{batch_protein_ids[cnt]}.pkl'), 'wb'))
+
+
 
 
 class DiscriminatorTrainer(BaseTrainer):
@@ -188,7 +213,7 @@ class DiscriminatorTrainer(BaseTrainer):
                 Eph: {eph:03d} ({early_stopper.counter} / {early_stopper.patience})')
             eph_loss = []
             for idx, sample in enumerate(batch_iterator):
-                data, label = sample
+                data, label, _ = sample
                 with self.accelerator.accumulate(self.model):
                     with self.accelerator.autocast():
                         predict = self.model(data)
@@ -226,15 +251,24 @@ class DiscriminatorTrainer(BaseTrainer):
 
     @torch.no_grad()
     def valid_model_performance(self, **kwargs):
-        pred_list, label_list = self.inference(*kwargs)
+        id2name_path = "/home/share/huadjyin/home/zhangkexin2/model/output/version2/tmp/test_6_28_protein_id2name.pkl"
+        pred_list, label_list, id_list = self.inference(*kwargs)
         pred = torch.hstack(pred_list).cpu()
         target = torch.hstack(label_list).cpu()
+        id = torch.hstack(id_list).cpu()
+        id2name_dict = pickle.load(open(id2name_path, 'rb'))
+        with open(
+                '/home/share/huadjyin/home/zhangkexin2/model/output/version2/tmp/discriminator_6_29_result.txt',
+                'w') as f:
+            f.write('protein_id' + ' ' + 'pred' + ' ' + 'target' + '\n')
+            for i in range(len(pred)):
+                f.write(str(id2name_dict[id[i].item()]) + ' ' + str(pred[i].item()) + ' ' + str(target[i].item()) + '\n')
+
         f1_value = f1_score(y_true=target, y_pred=pred)
         acc_value = accuracy_score(y_true=target, y_pred=pred)
         recall_value = recall_score(y_true=target, y_pred=pred)
         pre_value = precision_score(y_true=target, y_pred=pred)
-        print(acc_value,pre_value,recall_value,f1_value)
-
+        print(acc_value, pre_value, recall_value, f1_value)
 
     @torch.no_grad()
     def inference(self, **kwargs):
@@ -248,13 +282,19 @@ class DiscriminatorTrainer(BaseTrainer):
 
         pred_list = []
         label_list = []
+        id_list = []
         for idx, sample in enumerate(batch_iterator):
-            data, label = sample
+            data, label, id = sample
             logist = self.model(data)
             pred = F.softmax(logist, dim=-1).argmax(-1)
             pred_list.append(pred)
             label_list.append(label)
+            id_list.append(id)
+            # print(path,F.softmax(logist, dim=-1),pred,label)
         pred_gathered = self.accelerator.gather(pred_list)
         label_gathered = self.accelerator.gather(label_list)
+        id_gathered = self.accelerator.gather(id_list)
 
-        return pred_gathered, label_gathered
+        return pred_gathered, label_gathered, id_list
+
+
