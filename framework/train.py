@@ -307,14 +307,24 @@ def store_embeddings(rank, config, world_size):
 def train_classifier_from_stored_single_gpu(config):
     device = torch.device(f"cuda" if torch.cuda.is_available() else "cpu")
     Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
-    ds = TSVDataset(config["path"], config["emb_dir"], "mean")
+    train_ds = TSVDataset(config["train"], config["emb_dir"], "mean")
+    valid_ds = TSVDataset(config["valid"], config["emb_dir"], "mean")
+    test_ds = TSVDataset(config["test"], config["emb_dir"], "mean")
 
-    dataloader = data.DataLoader(
-        ds,
+    train_dataloader = data.DataLoader(
+        train_ds,
         batch_size=config["batch_size"],
         shuffle=True,
         num_workers=3,
         pin_memory=True,
+    )
+    valid_dataloader = data.DataLoader(
+        valid_ds,
+        batch_size=config["batch_size"],
+    )
+    test_dataloader = data.DataLoader(
+        test_ds,
+        batch_size=config["batch_size"],
     )
 
     timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
@@ -324,19 +334,21 @@ def train_classifier_from_stored_single_gpu(config):
     llm = choose_llm(config)
     d_model = llm.get_embedding_dim()
 
-    classifier = Classifier(d_model, ds.get_number_of_labels()).to(device)
+    classifier = Classifier(d_model, train_ds.get_number_of_labels()).to(device)
     run = init_wandb(config["model_folder"], timestamp, classifier)
 
     optimizer = torch.optim.Adam(classifier.parameters(), lr=config["lr"], eps=1e-9)
     scheduler = StepLR(optimizer, step_size=3, gamma=0.5)
-
-    # loss_function = nn.BCEWithLogitsLoss()
+    early_stopper = EarlyStopper(patience=4)
+    # A 2-class problem can be modeled as:
+    # - 2-neuron output with only one correct class: softmax + categorical_crossentropy
+    # - 1-neuron output, one class is 0, the other is 1: sigmoid + binary_crossentropy
     loss_function = nn.CrossEntropyLoss()
 
-    classifier.train()
     for epoch in range(config["num_epochs"]):
-        epoch_loss = 0
-        for batch in dataloader:
+        classifier.train()
+        train_loss = 0
+        for batch in train_dataloader:
             targets = batch["labels"].squeeze().to(device)
             embeddings = batch["emb"].to(device)
 
@@ -350,15 +362,53 @@ def train_classifier_from_stored_single_gpu(config):
 
             optimizer.step()
 
-            epoch_loss += loss
-            # metric = MultilabelAccuracy(criteria="hamming")
-            metric = MultilabelAccuracy()
-            metric.update(outputs, torch.where(targets > 0, 1, 0))
-            multilabel_acc = metric.compute()
-            wandb.log({"loss": loss, "multilabel_acc": multilabel_acc})
-        epoch_loss /= len(dataloader)
+            train_loss += loss
+        train_loss /= len(train_dataloader)
         scheduler.step()
-        wandb.log({"epoch_loss": epoch_loss})
+        wandb.log({"train loss": train_loss})
+
+        # Validation loop
+        classifier.eval()
+        with torch.no_grad():
+            acc = f1 = multilabel_acc = val_loss = 0
+            for batch in valid_dataloader:
+                targets = batch["labels"].squeeze().to(device)
+                embeddings = batch["emb"].to(device)
+                outputs = classifier(embeddings)
+                loss = loss_function(outputs, targets)
+                val_loss += loss.item()
+                if valid_ds.get_number_of_labels() > 2:
+                    # metric = MultilabelAccuracy(criteria="hamming")
+                    metric = MultilabelAccuracy()
+                    metric.update(outputs, torch.where(targets > 0, 1, 0))
+                    multilabel_acc += metric.compute()
+                else:
+                    acc += accuracy_score(
+                        torch.argmax(targets, dim=1).cpu(),
+                        torch.argmax(outputs, dim=1).cpu(),
+                    )
+                    f1 += f1_score(
+                        torch.argmax(targets, dim=1).cpu(),
+                        torch.argmax(outputs, dim=1).cpu(),
+                    )
+
+            val_loss = val_loss / len(valid_dataloader)
+            wandb.log({"validation loss": val_loss})
+
+            if valid_ds.get_number_of_labels() > 2:
+                multilabel_acc = multilabel_acc / len(valid_dataloader)
+                wandb.log({"validation multilabel accuracy": multilabel_acc})
+            else:
+                acc = acc / len(valid_dataloader)
+                f1 = f1 / len(valid_dataloader)
+                wandb.log({"validation accuracy": acc})
+                wandb.log({"validation f1_score": f1})
+        logger.warning(
+            f"[VALIDATION SET] Accuracy: {acc:.2f} F1: {f1:.2f} Validation loss: {val_loss:.2f} Training loss: {train_loss:.2f}"
+        )
+        if early_stopper.early_stop(val_loss):
+            logger.warning(f"Early stopping in epoch {epoch}...")
+            break
         # Save model at the end of every epoch
         model_filename = get_weights_file_path(config, f"{epoch:02d}")
         torch.save(
@@ -373,6 +423,37 @@ def train_classifier_from_stored_single_gpu(config):
         # log some metrics on batches and some metrics only on epochs
         # wandb.log({"batch": batch_idx, "loss": 0.3})
         # wandb.log({"epoch": epoch, "val_acc": 0.94})
+
+    # Test loop
+    classifier.eval()
+    acc = f1 = multilabel_acc = 0
+    with torch.no_grad():
+        for batch in test_dataloader:
+            targets = batch["labels"].squeeze().to(device)
+            embeddings = batch["emb"].to(device)
+            outputs = classifier(embeddings)
+            if test_ds.get_number_of_labels() > 2:
+                # metric = MultilabelAccuracy(criteria="hamming")
+                metric = MultilabelAccuracy()
+                metric.update(outputs, torch.where(targets > 0, 1, 0))
+                multilabel_acc += metric.compute()
+            else:
+                acc += accuracy_score(
+                    torch.argmax(targets, dim=1).cpu(),
+                    torch.argmax(outputs, dim=1).cpu(),
+                )
+                f1 += f1_score(
+                    torch.argmax(targets, dim=1).cpu(),
+                    torch.argmax(outputs, dim=1).cpu(),
+                )
+
+        if test_ds.get_number_of_labels() > 2:
+            multilabel_acc = multilabel_acc / len(test_dataloader)
+            logger.info(f"[TEST SET] Multilabel accuracy: {acc:.2f}")
+        else:
+            acc = acc / len(test_dataloader)
+            f1 = f1 / len(test_dataloader)
+            logger.info(f"[TEST SET] Accuracy: {acc:.2f} F1: {f1:.2f}")
     run.finish()
 
 
