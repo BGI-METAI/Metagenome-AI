@@ -29,6 +29,7 @@ from torch.optim.lr_scheduler import StepLR, LinearLR
 from torcheval.metrics import MultilabelAccuracy
 from tqdm import tqdm
 import wandb
+import time
 
 # Enable Multi-GPU training
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -203,7 +204,10 @@ def choose_llm(config):
     if config["emb_type"] == "ESM":
         return EsmEmbedding()
     elif config["emb_type"] == "PTRANS":
-        return ProteinTransEmbedding(model_name=config["prot_trans_model_name"])
+        if "prot_trans_model_path" not in config.keys() or config["prot_trans_model_path"] is None:
+            return ProteinTransEmbedding(model_name=config["prot_trans_model_name"])
+        else:
+            return ProteinTransEmbedding(model_name=config["prot_trans_model_path"], read_from_files = True)
     elif config["emb_type"] == "PVEC":
         return ProteinVecEmbedding()
     else:
@@ -253,7 +257,7 @@ def store_embeddings(rank, config, world_size):
         device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
         Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
 
-        ds = TSVDataset(config["train"])
+        ds = TSVDataset(config["path"])
         max_tokens = config["max_tokens"]
         chunk_size = len(ds) // world_size
         remainder = len(ds) % world_size
@@ -287,6 +291,8 @@ def store_embeddings(rank, config, world_size):
             init_wandb(config["model_folder"], timestamp)
 
         dist.barrier()
+
+        start_time = time.time()
         for batch in dataloader:
             try:
                 with torch.no_grad():
@@ -299,6 +305,9 @@ def store_embeddings(rank, config, world_size):
                     logger.error(batch["protein_id"])
                     torch.cuda.empty_cache()
                     print("Cuda was out of memory, recovering...")
+
+        end_time = time.time()
+        print(f"Elapsed time: {(end_time - start_time)/60} min")
         # Resource cleanup
     finally:
         destroy_process_group()
@@ -449,11 +458,11 @@ def train_classifier_from_stored_single_gpu(config):
 
         if test_ds.get_number_of_labels() > 2:
             multilabel_acc = multilabel_acc / len(test_dataloader)
-            logger.info(f"[TEST SET] Multilabel accuracy: {acc:.2f}")
+            logger.info(f"[TEST SET] Multilabel accuracy: {acc*100:.2f}%")
         else:
             acc = acc / len(test_dataloader)
             f1 = f1 / len(test_dataloader)
-            logger.info(f"[TEST SET] Accuracy: {acc:.2f} F1: {f1:.2f}")
+            logger.info(f"[TEST SET] Accuracy: {acc*100:.2f}% F1: {f1*100:.2f}%")
     run.finish()
 
 
@@ -510,7 +519,7 @@ def train_classifier(rank, config, world_size):
         # which are all far more superior than a simple FC for their chosen tasks. So if you have the capacity
         # of adding multiple FCs, why not just add another attention block? On the other hand, the embeddings
         # from a decent model should have large inter-class distance and small intra-class variance, which could
-        #  easily be projected to their corresponding classes in a linear fashion, and a FC is more than enough.
+        # easily be projected to their corresponding classes in a linear fashion, and a FC is more than enough.
         # classifier = Classifier(d_model, num_classes).to(rank)
         classifier = Classifier(d_model, num_classes).to(rank)
         classifier = DDP(classifier, device_ids=[rank])
@@ -721,7 +730,7 @@ if __name__ == "__main__":
     wandb.login(key=config["wandb_key"])
     world_size = torch.cuda.device_count()
 
-    if "emb_dir" not in config.keys():
+    if "emb_dir" not in config.keys() or config["emb_dir"] is None:
         config["emb_dir"] = os.path.join(config["out_dir"], "stored_embeddings")
         mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
     if not config["only_store_embeddings"]:
