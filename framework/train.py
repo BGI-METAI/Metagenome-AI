@@ -730,13 +730,13 @@ if __name__ == "__main__":
     wandb.login(key=config["wandb_key"])
     world_size = torch.cuda.device_count()
 
-    if config["program_mode"] == "only_store_embeddings":
+    if config["program_mode"] == "ONLY_STORE_EMBEDDINGS":
         mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
-    elif config["program_mode"] == "train_classifier_from_stored":
+    elif config["program_mode"] == "TRAIN_PREDICT_STORED":
         train_classifier_from_stored_single_gpu(config)
-    elif config["program_mode"] == "do_all":
+    elif config["program_mode"] == "RUN_ALL":
         mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
         train_classifier_from_stored_single_gpu(config)
     else:
-        print(f"You specifid wrong program mode. Only 1(just store), 2(just train) and 3(store and train) are available.")
+        print(f"You specifid wrong program mode. Only ONLY_STORE_EMBEDDINGS (just store), TRAIN_PREDICT_STORED (just train) and RUN_ALL (store and train) are available.")
 
