@@ -1,6 +1,8 @@
 import gc
 import re
 import logging
+import pickle
+import pathlib
 
 import numpy as np
 import torch
@@ -11,7 +13,7 @@ from embedding import Embedding
 # Adapted from https://github.com/tymor22/protein-vec/blob/main/src_run/gh_encode_and_search_new_proteins.ipynb
 
 class ProteinTransEmbedding(Embedding):
-    def __init__(self, model_name='prot_t5_xl_uniref50'):
+    def __init__(self, model_name='prot_t5_xl_uniref50', read_from_files = False):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model_name = model_name
 
@@ -21,8 +23,12 @@ class ProteinTransEmbedding(Embedding):
         # prot_bert, ProstT5, ProstT5_fp16,prot_t5_xl_uniref50, prot_t5_xl_half_uniref50-enc,
         # prot_t5_base_mt_uniref50, prot_t5_base_mt_uniref50, prot_bert_bfd_ss3, prot_bert_bfd_membrane,
         # prot_bert_bfd_localization, prot_t5_xxl_uniref50
-        self.tokenizer = T5Tokenizer.from_pretrained(f"Rostlab/{model_name}", do_lower_case=False )
-        self.model = T5EncoderModel.from_pretrained(f"Rostlab/{model_name}")
+        if not read_from_files:
+            self.tokenizer = T5Tokenizer.from_pretrained(f"Rostlab/{model_name}", do_lower_case=False)
+            self.model = T5EncoderModel.from_pretrained(f"Rostlab/{model_name}")
+        else:
+            self.tokenizer = T5Tokenizer.from_pretrained(f"{model_name}", do_lower_case=False, local_files_only = True)
+            self.model = T5EncoderModel.from_pretrained(f"{model_name}")
 
         self.model.to(self.device)
         self.model.eval()
@@ -66,3 +72,24 @@ class ProteinTransEmbedding(Embedding):
         prottrans_embedding = prottrans_embedding.to(device) # padding adds one more caracter (insted od 512 it is 513)
         
         return(prottrans_embedding)
+
+    def store_embeddings(self, batch, out_dir):
+        """Store each protein embedding in a separate file named [protein_id].pkl
+
+        Only mean pooling is saved.
+
+        Args:
+            batch: Each sample contains protein_id and sequence
+        """
+        pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
+
+        embeddings = self.get_embedding(batch).cpu().numpy()
+
+        for protein_id, mean_emb in zip(
+            batch["protein_id"], embeddings
+        ):
+            embeddings_dict = {
+                "mean": mean_emb,
+            }
+            with open(f"{out_dir}/{protein_id}.pkl", "wb") as file:
+                pickle.dump(embeddings_dict, file)
