@@ -257,7 +257,7 @@ def store_embeddings(rank, config, world_size):
         device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
         Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
 
-        ds = TSVDataset(config["path"])
+        ds = TSVDataset(config["sequences_path"])
         max_tokens = config["max_tokens"]
         chunk_size = len(ds) // world_size
         remainder = len(ds) % world_size
@@ -730,8 +730,13 @@ if __name__ == "__main__":
     wandb.login(key=config["wandb_key"])
     world_size = torch.cuda.device_count()
 
-    if "emb_dir" not in config.keys() or config["emb_dir"] is None:
-        config["emb_dir"] = os.path.join(config["out_dir"], "stored_embeddings")
+    if config["program_mode"] == 1:
         mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
-    if not config["only_store_embeddings"]:
+    elif config["program_mode"] == 2:
         train_classifier_from_stored_single_gpu(config)
+    elif config["program_mode"] == 3:
+        mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
+        train_classifier_from_stored_single_gpu(config)
+    else:
+        print(f"You specifid wrong program mode. Only 1(just store), 2(just train) and 3(store and train) are available.")
+
