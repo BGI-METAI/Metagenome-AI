@@ -257,7 +257,7 @@ def store_embeddings(rank, config, world_size):
         device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
         Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
 
-        ds = TSVDataset(config["path"])
+        ds = TSVDataset(config["sequences_path"])
         max_tokens = config["max_tokens"]
         chunk_size = len(ds) // world_size
         remainder = len(ds) % world_size
@@ -730,8 +730,17 @@ if __name__ == "__main__":
     wandb.login(key=config["wandb_key"])
     world_size = torch.cuda.device_count()
 
-    if "emb_dir" not in config.keys() or config["emb_dir"] is None:
-        config["emb_dir"] = os.path.join(config["out_dir"], "stored_embeddings")
+    valid_modes = ["ONLY_STORE_EMBEDDINGS", "TRAIN_PREDICT_FROM_STORED", "RUN_ALL"]
+    if config["program_mode"] not in valid_modes:
+        print(f"Invalid program mode: {config['program_mode']}. Turned on default mode of eperation [RUN_ALL].")
+        config["program_mode"] = "RUN_ALL"
+    else:
+        print(f"Program mode is: {config['program_mode']}.")
+
+    if config["program_mode"] == valid_modes[0]:  # ONLY_STORE_EMBEDDINGS
         mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
-    if not config["only_store_embeddings"]:
+    elif config["program_mode"] == valid_modes[1]:  # TRAIN_PREDICT_FROM_STORED
+        train_classifier_from_stored_single_gpu(config)
+    elif config["program_mode"] == valid_modes[2]:  # RUN_ALL
+        mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
         train_classifier_from_stored_single_gpu(config)
