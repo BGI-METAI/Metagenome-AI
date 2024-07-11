@@ -33,7 +33,7 @@ class ProteinTransEmbedding(Embedding):
         self.model.to(self.device)
         self.model.eval()
 
-        logging.info(f'Number of parameters in {model_name} model: ', sum(p.numel() for p in  self.model.parameters()))
+        logging.info(f'Number of parameters in {model_name} model: {sum(p.numel() for p in self.model.parameters())}')
 
     def get_embedding(self, batch):
         

@@ -15,6 +15,7 @@ import warnings
 import os
 from pathlib import Path
 import socket
+import numpy as np
 
 from matplotlib import pyplot as plt
 import datasets
@@ -447,6 +448,7 @@ def train_classifier_from_stored_single_gpu(config):
                 metric.update(outputs, torch.where(targets > 0, 1, 0))
                 multilabel_acc += metric.compute()
             else:
+                output_index = torch.argmax(outputs, dim=1).cpu(),
                 acc += accuracy_score(
                     torch.argmax(targets, dim=1).cpu(),
                     torch.argmax(outputs, dim=1).cpu(),
@@ -455,6 +457,9 @@ def train_classifier_from_stored_single_gpu(config):
                     torch.argmax(targets, dim=1).cpu(),
                     torch.argmax(outputs, dim=1).cpu(),
                 )
+                numpy_ind = np.array(output_index)
+                numpy_out = np.array(outputs.cpu())
+                prom = numpy_out[numpy_ind]
 
         if test_ds.get_number_of_labels() > 2:
             multilabel_acc = multilabel_acc / len(test_dataloader)
