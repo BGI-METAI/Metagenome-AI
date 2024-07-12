@@ -1,6 +1,6 @@
-torch==2.2.2 
-torchvision==0.17.2 
-torchaudio==2.2.2
+torch==2.2.2
+torchvision==0.17.2
+torcheval
 scikit-learn
 pytorch-lightning
 datasets
@@ -10,6 +10,5 @@ wandb
 transformers
 h5py
 faiss-gpu
-fair-esmPR
-sentencepiece 
-pickle
+fair-esm
+sentencepiece
