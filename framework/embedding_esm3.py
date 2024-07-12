@@ -34,7 +34,7 @@ class Esm3Embedding(EsmEmbedding):
 
         self.model = model
         self.alphabet = EsmSequenceTokenizer()  # model.get_structure_token_encoder()  #
-        self.model.structure_encoder = Identity()
+        # self.model.structure_encoder = Identity()
         self.model.eval()
         self.embed_dim = 1536 # TODO: model.embed_dim
         self.pooling = pooling
@@ -49,9 +49,9 @@ class Esm3Embedding(EsmEmbedding):
         batch_tokens = torch.tensor(tokens, dtype=torch.int64).cuda()  # To GPU
 
         with torch.no_grad():
-            esm_result = self.model(batch_tokens)
+            esm_result = self.model(sequence_tokens=batch_tokens)
 
-        return self._pooling(self.pooling, esm_result["embeddings"], batch_tokens, self.alphabet.pad_token_id)
+        return self._pooling(self.pooling, esm_result.embeddings, batch_tokens, self.alphabet.pad_token_id)
     
     def store_embeddings(self, batch, out_dir):
         """Store each protein embedding in a separate file named [protein_id].pkl
