@@ -8,6 +8,10 @@
 @Contact :   vladimirkovacevic@genomics.cn
 @Desc    :   None
 """
+
+import pathlib
+import pickle
+
 import torch
 from torch.nn import Identity
 from huggingface_hub import login
@@ -15,7 +19,6 @@ from esm.models.esm3 import ESM3
 from esm.sdk.api import ESM3InferenceClient
 from esm.tokenization.sequence_tokenizer import EsmSequenceTokenizer
 from esm.pretrained import ESM3_sm_open_v0
-
 from huggingface_hub.hf_api import HfFolder
 
 from embedding_esm import EsmEmbedding
@@ -31,12 +34,9 @@ class Esm3Embedding(EsmEmbedding):
 
         self.model = model
         self.alphabet = EsmSequenceTokenizer()  # model.get_structure_token_encoder()  #
-        self.model.output_heads = Identity()
-        self.model.structure_decoder = Identity()
-        self.model.function_decoder = Identity()
         self.model.structure_encoder = Identity()
         self.model.eval()
-        self.embed_dim = model.embed_dim
+        self.embed_dim = 1536 # TODO: model.embed_dim
         self.pooling = pooling
         # Freeze the parameters of ESM
         for param in self.model.parameters():
@@ -44,12 +44,35 @@ class Esm3Embedding(EsmEmbedding):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def get_embedding(self, batch):
-        tokens = self.alphabet.encode(batch["sequence"])
-        batch_tokens = self.model(tokens)  # TODO: Debug here!
-        batch_tokens = batch_tokens.to(self.device)
+
+        tokens = self.alphabet.batch_encode_plus(batch["sequence"], padding=True)['input_ids']  # encode
+        batch_tokens = torch.tensor(tokens, dtype=torch.int64).cuda()  # To GPU
+
         with torch.no_grad():
             esm_result = self.model(batch_tokens)
 
-        return self._pooling(self.pooling, esm_result["logits"], batch_tokens)
-
+        return self._pooling(self.pooling, esm_result["embeddings"], batch_tokens, self.alphabet.pad_token_id)
     
+    def store_embeddings(self, batch, out_dir):
+        """Store each protein embedding in a separate file named [protein_id].pkl
+
+        Save all types of poolings such that each file has a [3, emb_dim]
+        where rows 0, 1, 2 are mean, max, cls pooled respectively
+
+        Args:
+            batch: Each sample contains protein_id and sequence
+        """
+        pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
+        embeddings = self.get_embedding(batch)
+        embeddings = embeddings.detach().cpu()
+
+        for protein_id, emb in zip(
+            batch["protein_id"], embeddings
+        ):
+            embeddings_dict = {
+                self.pooling: emb,
+            }
+            with open(f"{out_dir}/{protein_id}.pkl", "wb") as file:
+                pickle.dump(embeddings_dict, file)
+
+
