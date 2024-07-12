@@ -113,11 +113,11 @@ check_family_presence(X_train, X_test, X_val)
 with open("pfam_train.csv", "w") as train, open("pfam_test.csv", "w") as test, open(
     "pfam_validation.csv", "w"
 ) as val:
-    writer = csv.writer(train)
+    writer = csv.writer(train, delimiter=" ")
     writer.writerows(X_train)
-    writer = csv.writer(test)
+    writer = csv.writer(test, delimiter=" ")
     writer.writerows(X_test)
-    writer = csv.writer(val)
+    writer = csv.writer(val, delimiter=" ")
     writer.writerows(X_val)
 
 print("Finished!")

@@ -14,6 +14,7 @@ import logging
 import warnings
 import os
 from pathlib import Path
+import csv
 import socket
 
 from matplotlib import pyplot as plt
@@ -204,10 +205,15 @@ def choose_llm(config):
     if config["emb_type"] == "ESM":
         return EsmEmbedding()
     elif config["emb_type"] == "PTRANS":
-        if "prot_trans_model_path" not in config.keys() or config["prot_trans_model_path"] is None:
+        if (
+            "prot_trans_model_path" not in config.keys()
+            or config["prot_trans_model_path"] is None
+        ):
             return ProteinTransEmbedding(model_name=config["prot_trans_model_name"])
         else:
-            return ProteinTransEmbedding(model_name=config["prot_trans_model_path"], read_from_files = True)
+            return ProteinTransEmbedding(
+                model_name=config["prot_trans_model_path"], read_from_files=True
+            )
     elif config["emb_type"] == "PVEC":
         return ProteinVecEmbedding()
     else:
@@ -326,10 +332,12 @@ def train_classifier_from_stored_single_gpu(config):
         shuffle=True,
         num_workers=3,
         pin_memory=True,
+        drop_last=True,
     )
     valid_dataloader = data.DataLoader(
         valid_ds,
         batch_size=config["batch_size"],
+        drop_last=True,
     )
     test_dataloader = data.DataLoader(
         test_ds,
@@ -436,6 +444,10 @@ def train_classifier_from_stored_single_gpu(config):
     # Test loop
     classifier.eval()
     acc = f1 = multilabel_acc = 0
+    with open(f"predictions_{timestamp}.csv", "a") as file:
+        writer = csv.writer(file, delimiter=" ")
+        writer.writerow(["protein_id", "prediction", "probability"])
+
     with torch.no_grad():
         for batch in test_dataloader:
             targets = batch["labels"].squeeze().to(device)
@@ -455,6 +467,22 @@ def train_classifier_from_stored_single_gpu(config):
                     torch.argmax(targets, dim=1).cpu(),
                     torch.argmax(outputs, dim=1).cpu(),
                 )
+
+                proba = torch.nn.functional.softmax(outputs)
+                prediction_proba = torch.max(proba, dim=1)
+                values_rounded = [
+                    round(p, 4) for p in prediction_proba.values.cpu().numpy()
+                ]
+                with open(f"predictions_{timestamp}.csv", "a") as file:
+                    writer = csv.writer(file, delimiter=" ")
+                    content = list(
+                        zip(
+                            batch["protein_id"],
+                            prediction_proba.indices.cpu().numpy(),
+                            values_rounded,
+                        )
+                    )
+                    writer.writerows(content)
 
         if test_ds.get_number_of_labels() > 2:
             multilabel_acc = multilabel_acc / len(test_dataloader)
@@ -732,7 +760,9 @@ if __name__ == "__main__":
 
     valid_modes = ["ONLY_STORE_EMBEDDINGS", "TRAIN_PREDICT_FROM_STORED", "RUN_ALL"]
     if config["program_mode"] not in valid_modes:
-        print(f"Invalid program mode: {config['program_mode']}. Turned on default mode of eperation [RUN_ALL].")
+        print(
+            f"Invalid program mode: {config['program_mode']}. Turned on default mode of eperation [RUN_ALL]."
+        )
         config["program_mode"] = "RUN_ALL"
     else:
         print(f"Program mode is: {config['program_mode']}.")
