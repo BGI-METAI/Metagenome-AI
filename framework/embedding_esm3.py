@@ -23,6 +23,7 @@ from huggingface_hub.hf_api import HfFolder
 
 from embedding_esm import EsmEmbedding
 
+
 class Esm3Embedding(EsmEmbedding):
     def __init__(self, pooling="mean"):
         login(token="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")
@@ -36,7 +37,7 @@ class Esm3Embedding(EsmEmbedding):
         self.alphabet = EsmSequenceTokenizer()  # model.get_structure_token_encoder()  #
         # self.model.structure_encoder = Identity()
         self.model.eval()
-        self.embed_dim = 1536 # TODO: model.embed_dim
+        self.embed_dim = 1536  # TODO: model.embed_dim
         self.pooling = pooling
         # Freeze the parameters of ESM
         for param in self.model.parameters():
@@ -45,14 +46,24 @@ class Esm3Embedding(EsmEmbedding):
 
     def get_embedding(self, batch):
 
-        tokens = self.alphabet.batch_encode_plus(batch["sequence"], padding=True)['input_ids']  # encode
+        tokens = self.alphabet.batch_encode_plus(batch["sequence"], padding=True)[
+            "input_ids"
+        ]  # encode
         batch_tokens = torch.tensor(tokens, dtype=torch.int64).cuda()  # To GPU
 
         with torch.no_grad():
             esm_result = self.model(sequence_tokens=batch_tokens)
 
-        return self._pooling(self.pooling, esm_result.embeddings, batch_tokens, self.alphabet.pad_token_id)
-    
+        return self._pooling(
+            self.pooling,
+            esm_result.embeddings,
+            batch_tokens,
+            self.alphabet.pad_token_id,
+        )
+
+    def get_embedding_dim(self):
+        return self.embed_dim
+
     def store_embeddings(self, batch, out_dir):
         """Store each protein embedding in a separate file named [protein_id].pkl
 
@@ -66,13 +77,9 @@ class Esm3Embedding(EsmEmbedding):
         embeddings = self.get_embedding(batch)
         embeddings = embeddings.detach().cpu()
 
-        for protein_id, emb in zip(
-            batch["protein_id"], embeddings
-        ):
+        for protein_id, emb in zip(batch["protein_id"], embeddings):
             embeddings_dict = {
-                self.pooling: emb,
+                self.pooling: emb.numpy(),
             }
             with open(f"{out_dir}/{protein_id}.pkl", "wb") as file:
                 pickle.dump(embeddings_dict, file)
-
-
