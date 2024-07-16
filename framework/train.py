@@ -450,24 +450,12 @@ def train_classifier_from_stored_single_gpu(config):
 
     with torch.no_grad():
         for batch in test_dataloader:
-            targets = batch["labels"].squeeze().to(device)
             embeddings = batch["emb"].to(device)
             outputs = classifier(embeddings)
             if test_ds.get_number_of_labels() > 2:
-                # metric = MultilabelAccuracy(criteria="hamming")
-                metric = MultilabelAccuracy()
-                metric.update(outputs, torch.where(targets > 0, 1, 0))
-                multilabel_acc += metric.compute()
+                pass
+                # code to save results in .csv
             else:
-                acc += accuracy_score(
-                    torch.argmax(targets, dim=1).cpu(),
-                    torch.argmax(outputs, dim=1).cpu(),
-                )
-                f1 += f1_score(
-                    torch.argmax(targets, dim=1).cpu(),
-                    torch.argmax(outputs, dim=1).cpu(),
-                )
-
                 proba = torch.nn.functional.softmax(outputs)
                 prediction_proba = torch.max(proba, dim=1)
                 values_rounded = [
