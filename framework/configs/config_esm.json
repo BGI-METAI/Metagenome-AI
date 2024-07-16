@@ -1,0 +1,16 @@
+{
+    "train": "/home/share/huadjyin/home/wangshengfu/06_esm/data_AMP",
+    "valid": null,
+    "test": null,
+    "batch_size": 32,
+    "num_epochs": 2,
+    "lr": 1e-3,
+    "emb_type": "ESM",
+    "label": "label",
+    "sequence": "original",
+    "max_seq_len": null,
+    "model_folder": "weights",
+    "model_basename": "prot_model_",
+    "preload": null,
+    "experiment_name": "runs/esmSmall"
+}
