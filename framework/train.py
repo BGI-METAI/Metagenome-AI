@@ -280,21 +280,11 @@ def store_embeddings(rank, config, world_size):
             ds, max_tokens, start_ind=indices[rank][0], end_ind=indices[rank][1]
         )
 
-        # dataloader = data.DataLoader(
-        #     ds,
-        #     batch_size=config["batch_size"],
-        #     shuffle=False,
-        #     sampler=DistributedSampler(ds),
-        # )
-
         llm = choose_llm(config)
         llm.to(device)
 
         timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
         logger = init_logger(timestamp)
-
-        if rank == 0:
-            init_wandb(config["model_folder"], timestamp)
 
         dist.barrier()
 
