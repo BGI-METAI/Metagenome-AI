@@ -257,13 +257,35 @@ def train_model_test(rank, world_size):
     pass
 
 
-def store_embeddings(rank, config, world_size):
+def store_embeddings(config):
+    world_size = torch.cuda.device_count()
+    if "train" in config and config["train"] is not None:
+        mp.spawn(
+            _store_embeddings,
+            args=(config, world_size, config["train"]),
+            nprocs=world_size,
+        )
+    if "valid" in config and config["valid"] is not None:
+        mp.spawn(
+            _store_embeddings,
+            args=(config, world_size, config["valid"]),
+            nprocs=world_size,
+        )
+    if "test" in config and config["test"] is not None:
+        mp.spawn(
+            _store_embeddings,
+            args=(config, world_size, config["test"]),
+            nprocs=world_size,
+        )
+
+
+def _store_embeddings(rank, config, world_size, data_path):
     try:
         ddp_setup(rank, world_size)
         device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
-        Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
+        Path(config["emb_dir"]).mkdir(parents=True, exist_ok=True)
 
-        ds = TSVDataset(config["sequences_path"])
+        ds = TSVDataset(data_path)
         max_tokens = config["max_tokens"]
         chunk_size = len(ds) // world_size
         remainder = len(ds) % world_size
@@ -746,9 +768,11 @@ if __name__ == "__main__":
         print(f"Program mode is: {config['program_mode']}.")
 
     if config["program_mode"] == valid_modes[0]:  # ONLY_STORE_EMBEDDINGS
-        mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
+        # mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
+        store_embeddings(config)
     elif config["program_mode"] == valid_modes[1]:  # TRAIN_PREDICT_FROM_STORED
         train_classifier_from_stored_single_gpu(config)
     elif config["program_mode"] == valid_modes[2]:  # RUN_ALL
-        mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
+        # mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
+        store_embeddings(config)
         train_classifier_from_stored_single_gpu(config)
