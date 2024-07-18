@@ -142,7 +142,7 @@ class EarlyStopper:
         if validation_loss < self.min_validation_loss:
             self.min_validation_loss = validation_loss
             self.counter = 0
-        elif validation_loss > (self.min_validation_loss + self.min_delta):
+        elif validation_loss >= (self.min_validation_loss + self.min_delta):
             self.counter += 1
             if self.counter >= self.patience:
                 return True
@@ -257,13 +257,35 @@ def train_model_test(rank, world_size):
     pass
 
 
-def store_embeddings(rank, config, world_size):
+def store_embeddings(config):
+    world_size = torch.cuda.device_count()
+    if "train" in config and config["train"] is not None:
+        mp.spawn(
+            _store_embeddings,
+            args=(config, world_size, config["train"]),
+            nprocs=world_size,
+        )
+    if "valid" in config and config["valid"] is not None:
+        mp.spawn(
+            _store_embeddings,
+            args=(config, world_size, config["valid"]),
+            nprocs=world_size,
+        )
+    if "test" in config and config["test"] is not None:
+        mp.spawn(
+            _store_embeddings,
+            args=(config, world_size, config["test"]),
+            nprocs=world_size,
+        )
+
+
+def _store_embeddings(rank, config, world_size, data_path):
     try:
         ddp_setup(rank, world_size)
         device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
-        Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
+        Path(config["emb_dir"]).mkdir(parents=True, exist_ok=True)
 
-        ds = TSVDataset(config["sequences_path"])
+        ds = TSVDataset(data_path)
         max_tokens = config["max_tokens"]
         chunk_size = len(ds) // world_size
         remainder = len(ds) % world_size
@@ -280,21 +302,11 @@ def store_embeddings(rank, config, world_size):
             ds, max_tokens, start_ind=indices[rank][0], end_ind=indices[rank][1]
         )
 
-        # dataloader = data.DataLoader(
-        #     ds,
-        #     batch_size=config["batch_size"],
-        #     shuffle=False,
-        #     sampler=DistributedSampler(ds),
-        # )
-
         llm = choose_llm(config)
         llm.to(device)
 
         timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
         logger = init_logger(timestamp)
-
-        if rank == 0:
-            init_wandb(config["model_folder"], timestamp)
 
         dist.barrier()
 
@@ -319,12 +331,9 @@ def store_embeddings(rank, config, world_size):
         destroy_process_group()
 
 
-def train_classifier_from_stored_single_gpu(config):
+def train_loop(config, logger, train_ds, valid_ds, timestamp):
     device = torch.device(f"cuda" if torch.cuda.is_available() else "cpu")
     Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
-    train_ds = TSVDataset(config["train"], config["emb_dir"], "mean")
-    valid_ds = TSVDataset(config["valid"], config["emb_dir"], "mean")
-    test_ds = TSVDataset(config["test"], config["emb_dir"], "mean")
 
     train_dataloader = data.DataLoader(
         train_ds,
@@ -339,21 +348,14 @@ def train_classifier_from_stored_single_gpu(config):
         batch_size=config["batch_size"],
         drop_last=True,
     )
-    test_dataloader = data.DataLoader(
-        test_ds,
-        batch_size=config["batch_size"],
-    )
-
-    timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
-    logger = init_logger(timestamp)
 
     # Or replace this part to be a part of the config as well
     llm = choose_llm(config)
     d_model = llm.get_embedding_dim()
 
     classifier = Classifier(d_model, train_ds.get_number_of_labels()).to(device)
-    run = init_wandb(config["model_folder"], timestamp, classifier)
 
+    run = init_wandb(config["model_folder"], timestamp, classifier)
     optimizer = torch.optim.Adam(classifier.parameters(), lr=config["lr"], eps=1e-9)
     scheduler = StepLR(optimizer, step_size=3, gamma=0.5)
     early_stopper = EarlyStopper(patience=4)
@@ -440,6 +442,33 @@ def train_classifier_from_stored_single_gpu(config):
         # log some metrics on batches and some metrics only on epochs
         # wandb.log({"batch": batch_idx, "loss": 0.3})
         # wandb.log({"epoch": epoch, "val_acc": 0.94})
+    run.finish()
+    return classifier
+
+
+def train_classifier_from_stored_single_gpu(config):
+    device = torch.device(f"cuda" if torch.cuda.is_available() else "cpu")
+    timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+    logger = init_logger(timestamp)
+
+    train_ds = TSVDataset(config["train"], config["emb_dir"], "mean")
+    valid_ds = TSVDataset(config["valid"], config["emb_dir"], "mean")
+    test_ds = TSVDataset(config["test"], config["emb_dir"], "mean")
+
+    test_dataloader = data.DataLoader(
+        test_ds,
+        batch_size=config["batch_size"],
+    )
+
+    if "model_path" in config and config["model_path"] is not None:
+        llm = choose_llm(config)
+        d_model = llm.get_embedding_dim()
+        classifier = Classifier(d_model, train_ds.get_number_of_labels()).to(device)
+        print(f"Loading model: {config['model_path']}")
+        state = torch.load(config["model_path"])
+        classifier.load_state_dict(state["model_state_dict"])
+    else:
+        classifier = train_loop(config, logger, train_ds, valid_ds, timestamp)
 
     # Test loop
     classifier.eval()
@@ -479,7 +508,6 @@ def train_classifier_from_stored_single_gpu(config):
             acc = acc / len(test_dataloader)
             f1 = f1 / len(test_dataloader)
             logger.info(f"[TEST SET] Accuracy: {acc*100:.2f}% F1: {f1*100:.2f}%")
-    run.finish()
 
 
 def train_classifier(rank, config, world_size):
@@ -756,9 +784,11 @@ if __name__ == "__main__":
         print(f"Program mode is: {config['program_mode']}.")
 
     if config["program_mode"] == valid_modes[0]:  # ONLY_STORE_EMBEDDINGS
-        mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
+        # mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
+        store_embeddings(config)
     elif config["program_mode"] == valid_modes[1]:  # TRAIN_PREDICT_FROM_STORED
         train_classifier_from_stored_single_gpu(config)
     elif config["program_mode"] == valid_modes[2]:  # RUN_ALL
-        mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
+        # mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
+        store_embeddings(config)
         train_classifier_from_stored_single_gpu(config)
