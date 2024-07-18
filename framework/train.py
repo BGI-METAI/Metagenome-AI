@@ -331,12 +331,9 @@ def _store_embeddings(rank, config, world_size, data_path):
         destroy_process_group()
 
 
-def train_classifier_from_stored_single_gpu(config):
+def train_loop(config, logger, train_ds, valid_ds, timestamp):
     device = torch.device(f"cuda" if torch.cuda.is_available() else "cpu")
     Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
-    train_ds = TSVDataset(config["train"], config["emb_dir"], "mean")
-    valid_ds = TSVDataset(config["valid"], config["emb_dir"], "mean")
-    test_ds = TSVDataset(config["test"], config["emb_dir"], "mean")
 
     train_dataloader = data.DataLoader(
         train_ds,
@@ -351,21 +348,14 @@ def train_classifier_from_stored_single_gpu(config):
         batch_size=config["batch_size"],
         drop_last=True,
     )
-    test_dataloader = data.DataLoader(
-        test_ds,
-        batch_size=config["batch_size"],
-    )
-
-    timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
-    logger = init_logger(timestamp)
 
     # Or replace this part to be a part of the config as well
     llm = choose_llm(config)
     d_model = llm.get_embedding_dim()
 
     classifier = Classifier(d_model, train_ds.get_number_of_labels()).to(device)
-    run = init_wandb(config["model_folder"], timestamp, classifier)
 
+    run = init_wandb(config["model_folder"], timestamp, classifier)
     optimizer = torch.optim.Adam(classifier.parameters(), lr=config["lr"], eps=1e-9)
     scheduler = StepLR(optimizer, step_size=3, gamma=0.5)
     early_stopper = EarlyStopper(patience=4)
@@ -452,6 +442,33 @@ def train_classifier_from_stored_single_gpu(config):
         # log some metrics on batches and some metrics only on epochs
         # wandb.log({"batch": batch_idx, "loss": 0.3})
         # wandb.log({"epoch": epoch, "val_acc": 0.94})
+    run.finish()
+    return classifier
+
+
+def train_classifier_from_stored_single_gpu(config):
+    device = torch.device(f"cuda" if torch.cuda.is_available() else "cpu")
+    timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+    logger = init_logger(timestamp)
+
+    train_ds = TSVDataset(config["train"], config["emb_dir"], "mean")
+    valid_ds = TSVDataset(config["valid"], config["emb_dir"], "mean")
+    test_ds = TSVDataset(config["test"], config["emb_dir"], "mean")
+
+    test_dataloader = data.DataLoader(
+        test_ds,
+        batch_size=config["batch_size"],
+    )
+
+    if "model_path" in config and config["model_path"] is not None:
+        llm = choose_llm(config)
+        d_model = llm.get_embedding_dim()
+        classifier = Classifier(d_model, train_ds.get_number_of_labels()).to(device)
+        print(f"Loading model: {config['model_path']}")
+        state = torch.load(config["model_path"])
+        classifier.load_state_dict(state["model_state_dict"])
+    else:
+        classifier = train_loop(config, logger, train_ds, valid_ds, timestamp)
 
     # Test loop
     classifier.eval()
@@ -491,7 +508,6 @@ def train_classifier_from_stored_single_gpu(config):
             acc = acc / len(test_dataloader)
             f1 = f1 / len(test_dataloader)
             logger.info(f"[TEST SET] Accuracy: {acc*100:.2f}% F1: {f1*100:.2f}%")
-    run.finish()
 
 
 def train_classifier(rank, config, world_size):
