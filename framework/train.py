@@ -74,6 +74,7 @@ def init_wandb(model_folder, timestamp, model=None):
     # initialize wandb tracker
     wandb_output_dir = os.path.join(model_folder, "wandb_home")
     Path(wandb_output_dir).mkdir(parents=True, exist_ok=True)
+    wandb.require("core")
     run = wandb.init(
         project="protein function annotation",
         notes=socket.gethostname(),
@@ -448,6 +449,7 @@ def train_loop(config, logger, train_ds, valid_ds, timestamp):
         # log some metrics on batches and some metrics only on epochs
         # wandb.log({"batch": batch_idx, "loss": 0.3})
         # wandb.log({"epoch": epoch, "val_acc": 0.94})
+    wandb.unwatch()
     run.finish()
     return classifier
 
