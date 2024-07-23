@@ -10,6 +10,8 @@
 """
 
 import csv
+import io
+import re
 import torch
 from torch.utils.data import Dataset
 from collections import defaultdict
@@ -48,7 +50,11 @@ class TSVDataset(Dataset):
         self.embeddings_dir = embeddings_dir
         self.emb_type = emb_type
         with open(path) as file:
-            reader = csv.reader(file, delimiter=" ")
+            content = file.read()
+            content = re.sub(r" +", "|", content)
+            string_sample = content[:1024]
+            dialect = csv.Sniffer().sniff(string_sample, ["|", ",", "\t"])
+            reader = csv.reader(io.StringIO(content), dialect)
             self.samples = list(reader)
         self.mlb = MultiLabelBinarizer()
         self.mlb.fit([sample[3:] for sample in self.samples])
