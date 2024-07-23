@@ -492,7 +492,7 @@ def train_classifier_from_stored_single_gpu(config):
                 values_rounded = [
                     round(p, 4) for p in prediction_proba.values.cpu().numpy()
                 ]
-                with open(f"predictions_{timestamp}.csv", "a") as file:
+                with open(f"predictions_{timestamp}.tsv", "a") as file:
                     writer = csv.writer(file, delimiter="\t")
                     content = list(
                         zip(
