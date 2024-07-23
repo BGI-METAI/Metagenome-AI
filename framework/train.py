@@ -493,7 +493,7 @@ def train_classifier_from_stored_single_gpu(config):
                     round(p, 4) for p in prediction_proba.values.cpu().numpy()
                 ]
                 with open(f"predictions_{timestamp}.csv", "a") as file:
-                    writer = csv.writer(file, delimiter=" ")
+                    writer = csv.writer(file, delimiter="\t")
                     content = list(
                         zip(
                             batch["protein_id"],
