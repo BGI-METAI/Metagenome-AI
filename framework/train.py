@@ -475,8 +475,8 @@ def train_classifier_from_stored_single_gpu(config):
     # Test loop
     classifier.eval()
     acc = f1 = multilabel_acc = 0
-    with open(f"predictions_{timestamp}.csv", "a") as file:
-        writer = csv.writer(file, delimiter=" ")
+    with open(f"predictions_{timestamp}.tsv", "a") as file:
+        writer = csv.writer(file, delimiter="\t")
         writer.writerow(["protein_id", "prediction", "probability"])
 
     with torch.no_grad():
@@ -485,7 +485,7 @@ def train_classifier_from_stored_single_gpu(config):
             outputs = classifier(embeddings)
             if test_ds.get_number_of_labels() > 2:
                 pass
-                # code to save results in .csv
+                # code to save results in .tsv
             else:
                 proba = torch.nn.functional.softmax(outputs)
                 prediction_proba = torch.max(proba, dim=1)
