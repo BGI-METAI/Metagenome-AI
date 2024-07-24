@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="25e5374d-57b6-4746-aa45-b96df3f62e4a" name="esm3">
+        <fileTransfer rootFolder="/home/share/huadjyin/home/wangshengfu" accessType="SFTP" host="27.18.114.42" port="4122" sshConfigId="473aae47-f7e0-4349-9ef0-12e4a443a7b0" sshConfig="wangshengfu@27.18.114.42:4122 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

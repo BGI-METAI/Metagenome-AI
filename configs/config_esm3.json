@@ -1,0 +1,26 @@
+{
+    "sequences_path": "//home/share/huadjyin/home/wangshengfu/06_esm/data_AMP/test.csv",
+    "emb_dir": "/home/share/huadjyin/home/wangshengfu/89_esm/results/esm3",
+    "program_mode": "ONLY_STORE_EMBEDDINGS",
+    
+    "train": "/home/share/huadjyin/home/wangshengfu/06_esm/data_AMP/data_train.csv",
+    "test": "/home/share/huadjyin/home/wangshengfu/06_esm/data_AMP/data_test.csv",
+    "valid": "/home/share/huadjyin/home/wangshengfu/06_esm/data_AMP/data_val.csv",
+    
+    "emb_type": "ESM3",
+    "max_tokens": 3000,
+    "chunk_key_size": 10240,
+    
+    "batch_size": 100,
+    "num_epochs": 4,
+    "lr": 1e-3,
+    
+    "label": "label",
+    "sequence": "original",
+    "max_seq_len": null,
+    "model_folder": "weights",
+    "model_basename": "esm3_model_",
+    "preload": null,
+    "experiment_name": "runs/esmSmall",
+    "wandb_key": "8650f0776cd5b7c69f0049de35e2da564004f132" 
+    }
