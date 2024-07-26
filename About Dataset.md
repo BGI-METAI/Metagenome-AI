@@ -37,7 +37,7 @@ described above to obtain the `protein_seq_PFAM_fragment.txt` and `protein_seq_G
 >
 > ​                                                                        Figure 2. The distribution of PFAM whole protein length (0-1000 range)
 >
-> <img src="PFAM_protein_numbers.png">
+> <img src="figs/PFAM_protein_numbers.png">
 >
 > ​                                                                                         Figure 3. The distribution of protein families and protein numbers
 >
@@ -60,7 +60,7 @@ described above to obtain the `protein_seq_PFAM_fragment.txt` and `protein_seq_G
 
 ## **Independent test set description**s
 
-For PFAM, in order to partition the data set while being comparable to other baseline methods, we collated several comparison methods for predicting PFAM tasks, such as protENN and proteinvec. For protENN, because its data does not use the uniprot protein id as a unique identifier, we converted the id according to the mapping relationship of uniprot and filtered out the data that did not match (see the following table for details). After that, we merged the integrated test set data to obtain 143017 protein data. The integrated file path is `/home/share/huadjyin/home/zhangkexin2/data/benchmark_merge_data/PFAM/protvec_protenn_all_test_protein_merge.txt`. Further, we extend this test data using [uniref50]([* in UniRef search (66075574) | UniProt](https://www.uniprot.org/uniref?query=*&facets=identity%3A0.5)) to form a ratio of 6:2:2 for the training, validation and test data.
+For PFAM, in order to partition the data set while being comparable to other baseline methods, we collated several comparison methods for predicting PFAM tasks, such as protENN and proteinvec. For protENN, because its data does not use the uniprot protein id as a unique identifier, we converted the id according to the mapping relationship of uniprot and filtered out the data that did not match (see the following table for details). After that, we merged the integrated test set data to obtain 143017 protein data. The integrated file path is `/home/share/huadjyin/home/zhangkexin2/data/benchmark_merge_data/PFAM/protvec_protenn_all_test_protein_merge.txt`. Further, we extend this test data using [uniref50](https://www.uniprot.org/uniref?query=*&facets=identity%3A0.5) to form a ratio of 6:2:2 for the training, validation and test data.
 
 | model           | independent test data | filtered |
 | --------------- | --------------------- | -------- |
