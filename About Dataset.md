@@ -37,7 +37,7 @@ described above to obtain the `protein_seq_PFAM_fragment.txt` and `protein_seq_G
 >
 > ​                                                                        Figure 2. The distribution of PFAM whole protein length (0-1000 range)
 >
-> <img src="figs/PFAM_protein_numbers.png">
+> <img src="figs/PFAM_protein_numbers.png" style="zoom: 67%;">
 >
 > ​                                                                                         Figure 3. The distribution of protein families and protein numbers
 >
