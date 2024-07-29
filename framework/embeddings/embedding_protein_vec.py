@@ -6,7 +6,7 @@ from transformers import T5EncoderModel, T5Tokenizer
 
 from protein_vec import trans_basic_block, trans_basic_block_Config
 from protein_vec import featurize_prottrans, embed_vec
-from embedding_protein_trans import ProteinTransEmbedding
+from embeddings.embedding_protein_trans import ProteinTransEmbedding
 
 # Adapted from https://github.com/tymor22/protein-vec/blob/main/src_run/gh_encode_and_search_new_proteins.ipynb
 
