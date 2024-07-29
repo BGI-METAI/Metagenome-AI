@@ -27,7 +27,7 @@ import torch
 import torch.nn as nn
 from torch.utils import data
 from torch.optim.lr_scheduler import StepLR, LinearLR
-from torcheval.metrics import MultilabelAccuracy
+# from torcheval.metrics import MultilabelAccuracy
 from tqdm import tqdm
 import wandb
 import time
@@ -47,6 +47,10 @@ try:
     from embedding_esm import EsmEmbedding
 except ImportError:
     print("You are missing some of the libraries for ESM")
+try:
+    from embedding_esm3 import Esm3Embedding
+except ImportError:
+    print("You are missing some of the libraries for ESM3")
 try:
     from embedding_protein_trans import ProteinTransEmbedding
 except ImportError:
@@ -205,6 +209,8 @@ def choose_llm(config):
     """
     if config["emb_type"] == "ESM":
         return EsmEmbedding()
+    if config["emb_type"] == "ESM3":
+        return Esm3Embedding()
     elif config["emb_type"] == "PTRANS":
         if (
             "prot_trans_model_path" not in config.keys()
