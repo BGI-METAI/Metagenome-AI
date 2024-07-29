@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from transformers import T5EncoderModel, T5Tokenizer
 
-from embedding import Embedding
+from embeddings.embedding import Embedding
 
 # Adapted from https://github.com/tymor22/protein-vec/blob/main/src_run/gh_encode_and_search_new_proteins.ipynb
 

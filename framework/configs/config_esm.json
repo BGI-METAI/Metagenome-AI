@@ -1,7 +1,10 @@
 {
-    "train": "../transformer/pfam_tiny_1579.train.csv",
-    "valid": null,
-    "test": null,
+    "train": "framework/data/sample_train.csv",
+    "max_tokens": 1000,
+    "valid": "framework/data/sample_validation.csv",
+    "test": "framework/data/sample_test.csv",
+    "emb_dir": "/home/nikola_dev/Metagenome-AI/amp_embeddings/esm_emb/",
+    "program_mode": "TRAIN_PREDICT_FROM_STORED",
     "batch_size": 32,
     "num_epochs": 2,
     "lr": 1e-3,
@@ -9,8 +12,10 @@
     "label": "label",
     "sequence": "original",
     "max_seq_len": null,
-    "model_folder": "weights",
-    "model_basename": "prot_model_",
+    "model_folder": "models",
+    "model_basename": "test_esm",
     "preload": null,
-    "experiment_name": "runs/esmSmall"
+    "model_path1": null,
+    "experiment_name": "runs/esmSmall",
+    "wandb_key": "66bdf7f04d7842bb591556f5263dd9c779ca1ce7"
 }
