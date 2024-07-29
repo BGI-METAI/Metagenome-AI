@@ -50,7 +50,7 @@ class EsmEmbedding(Embedding):
         # The first token of every sequence is always a special classification token ([CLS]).
         # The final hidden state corresponding to this token is used as the aggregate sequence representation
         # for classification tasks.
-        return self._pooling(self.pooling, esm_result["logits"], batch_tokens)
+        return self._pooling(self.pooling, esm_result["logits"], batch_tokens, self.alphabet.padding_idx)
 
     def to(self, device):
         self.model = self.model.to(device)
@@ -58,7 +58,7 @@ class EsmEmbedding(Embedding):
     def get_embedding_dim(self):
         return self.model.embed_dim
 
-    def _pooling(self, strategy, tensors, batch_tokens):
+    def _pooling(self, strategy, tensors, batch_tokens, pad_token_id):
         """Perform pooling on [batch_size, seq_len, emb_dim] tensor
 
         Args:
@@ -68,18 +68,10 @@ class EsmEmbedding(Embedding):
             seq_repr = tensors[:, 0, :]
         elif strategy == "mean":
             seq_repr = []
-            batch_lens = (batch_tokens != self.alphabet.padding_idx).sum(1)
+            batch_lens = (batch_tokens != pad_token_id).sum(1)
 
             for i, tokens_len in enumerate(batch_lens):
                 seq_repr.append(tensors[i, 1 : tokens_len - 1].mean(0))
-
-            seq_repr = torch.vstack(seq_repr)
-        elif strategy == "max":
-            seq_repr = []
-            batch_lens = (batch_tokens != self.alphabet.padding_idx).sum(1)
-
-            for i, tokens_len in enumerate(batch_lens):
-                seq_repr.append(tensors[i, 1 : tokens_len - 1].max(0)[0])
 
             seq_repr = torch.vstack(seq_repr)
         else:
