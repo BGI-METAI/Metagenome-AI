@@ -27,7 +27,7 @@ import torch
 import torch.nn as nn
 from torch.utils import data
 from torch.optim.lr_scheduler import StepLR, LinearLR
-from torcheval.metrics import MultilabelAccuracy
+# from torcheval.metrics import MultilabelAccuracy
 from tqdm import tqdm
 import wandb
 import time
@@ -134,6 +134,8 @@ def choose_llm(config):
     """
     if config["emb_type"] == "ESM":
         return embeddings.EsmEmbedding()
+    elif config["emb_type"] == "ESM3":
+        return Esm3Embedding()
     elif config["emb_type"] == "PTRANS":
         if (
             "prot_trans_model_path" not in config.keys()
@@ -147,14 +149,11 @@ def choose_llm(config):
                 model_name=config["prot_trans_model_path"], read_from_files=True
             )
     elif config["emb_type"] == "PVEC":
-        return embeddings.ProteinVecEmbedding()
-    else:
-        raise NotImplementedError("This type of embedding is not supported")
-
+        return embeddings.ProteinVecEmbedding() 
+    raise NotImplementedError("This type of embedding is not supported")
 
 def store_embeddings(config):
     world_size = torch.cuda.device_count()
-    if "train" in config and config["train"] is not None:
         mp.spawn(
             _store_embeddings,
             args=(config, world_size, config["train"]),
@@ -369,8 +368,8 @@ def train_classifier_from_stored_single_gpu(config):
     # Test loop
     classifier.eval()
     acc = f1 = multilabel_acc = 0
-    with open(f"predictions_{timestamp}.csv", "a") as file:
-        writer = csv.writer(file, delimiter=" ")
+    with open(f"predictions_{timestamp}.tsv", "a") as file:
+        writer = csv.writer(file, delimiter="\t")
         writer.writerow(["protein_id", "prediction", "probability"])
 
     with torch.no_grad():
@@ -379,15 +378,15 @@ def train_classifier_from_stored_single_gpu(config):
             outputs = classifier(embeddings)
             if test_ds.get_number_of_labels() > 2:
                 pass
-                # code to save results in .csv
+                # code to save results in .tsv
             else:
                 proba = torch.nn.functional.softmax(outputs)
                 prediction_proba = torch.max(proba, dim=1)
                 values_rounded = [
                     round(p, 4) for p in prediction_proba.values.cpu().numpy()
                 ]
-                with open(f"predictions_{timestamp}.csv", "a") as file:
-                    writer = csv.writer(file, delimiter=" ")
+                with open(f"predictions_{timestamp}.tsv", "a") as file:
+                    writer = csv.writer(file, delimiter="\t")
                     content = list(
                         zip(
                             batch["protein_id"],

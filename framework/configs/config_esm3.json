@@ -1,0 +1,25 @@
+{
+"sequences_path": "/goofys/projects/MAI/data/AMP_dataset/AMP_dataset.csv",
+"emb_dir": "results/esm3",
+"program_mode": "ONLY_STORE_EMBEDDINGS",
+
+"train": "/goofys/projects/MAI/data/AMP_dataset/AMP_dataset_train.csv",
+"test": "/goofys/projects/MAI/data/AMP_dataset/AMP_dataset_validation.csv",
+"valid": "/goofys/projects/MAI/data/AMP_dataset/AMP_dataset_test.csv",
+
+"emb_type": "ESM3",
+"max_tokens": 3000,
+
+"batch_size": 200,
+"num_epochs": 4,
+"lr": 1e-3,
+
+"label": "label",
+"sequence": "original",
+"max_seq_len": null,
+"model_folder": "weights",
+"model_basename": "esm3_model_",
+"preload": null,
+"experiment_name": "runs/esmSmall",
+"wandb_key": "8650f0776cd5b7c69f0049de35e2da564004f132" 
+}
