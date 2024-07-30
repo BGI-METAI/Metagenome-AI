@@ -1,14 +1,14 @@
 {
-    "train": "framework/data/sample_train.csv",
+    "train": "data/sample_train.csv",
     "max_tokens": 1000,
-    "valid": "framework/data/sample_validation.csv",
-    "test": "framework/data/sample_test.csv",
+    "valid": "data/sample_validation.csv",
+    "test": "data/sample_test.csv",
     "emb_dir": "esm_emb/",
-    "program_mode": "RUN_ALL",
+    "program_mode": "TRAIN_PREDICT_FROM_STORED",
     "batch_size": 32,
     "num_epochs": 5,
     "lr": 1e-3,
-    "emb_type": "ESM",
+    "emb_type": "ESM3",
     "label": "label",
     "sequence": "original",
     "max_seq_len": null,
@@ -17,5 +17,5 @@
     "preload": null,
     "model_path1": null,
     "experiment_name": "runs/esmSmall",
-    "wandb_key": "8650f0776cd5b7c69f0049de35e2da"
+    "wandb_key": "8650f0776cd5b7c69f0049de35e2da564004f132"
 }
