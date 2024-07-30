@@ -4,9 +4,9 @@
     "valid": "framework/data/sample_validation.csv",
     "test": "framework/data/sample_test.csv",
     "emb_dir": "esm_emb/",
-    "program_mode": "TRAIN_PREDICT_FROM_STORED",
+    "program_mode": "RUN_ALL",
     "batch_size": 32,
-    "num_epochs": 2,
+    "num_epochs": 5,
     "lr": 1e-3,
     "emb_type": "ESM",
     "label": "label",
@@ -17,5 +17,5 @@
     "preload": null,
     "model_path1": null,
     "experiment_name": "runs/esmSmall",
-    "wandb_key": "66bdf7f04d7842bb591556f5263dd"
+    "wandb_key": "8650f0776cd5b7c69f0049de35e2da"
 }
