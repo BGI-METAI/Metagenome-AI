@@ -135,7 +135,7 @@ def choose_llm(config):
     if config["emb_type"] == "ESM":
         return embeddings.EsmEmbedding()
     elif config["emb_type"] == "ESM3":
-        return Esm3Embedding()
+        return embeddings.Esm3Embedding()
     elif config["emb_type"] == "PTRANS":
         if (
             "prot_trans_model_path" not in config.keys()
@@ -154,6 +154,7 @@ def choose_llm(config):
 
 def store_embeddings(config):
     world_size = torch.cuda.device_count()
+    if "train" in config and config["train"] is not None:
         mp.spawn(
             _store_embeddings,
             args=(config, world_size, config["train"]),

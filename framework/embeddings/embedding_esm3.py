@@ -21,7 +21,7 @@ from esm.tokenization.sequence_tokenizer import EsmSequenceTokenizer
 from esm.pretrained import ESM3_sm_open_v0
 from huggingface_hub.hf_api import HfFolder
 
-from embedding_esm import EsmEmbedding
+from embeddings.embedding_esm import EsmEmbedding
 
 
 class Esm3Embedding(EsmEmbedding):
