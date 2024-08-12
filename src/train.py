@@ -27,6 +27,7 @@ import torch
 import torch.nn as nn
 from torch.utils import data
 from torch.optim.lr_scheduler import StepLR, LinearLR
+
 # from torcheval.metrics import MultilabelAccuracy
 from tqdm import tqdm
 import wandb
@@ -149,8 +150,9 @@ def choose_llm(config):
                 model_name=config["prot_trans_model_path"], read_from_files=True
             )
     elif config["emb_type"] == "PVEC":
-        return embeddings.ProteinVecEmbedding() 
+        return embeddings.ProteinVecEmbedding()
     raise NotImplementedError("This type of embedding is not supported")
+
 
 def store_embeddings(config):
     world_size = torch.cuda.device_count()
@@ -375,10 +377,14 @@ def train_classifier_from_stored_single_gpu(config):
 
     with torch.no_grad():
         for batch in test_dataloader:
+            targets = batch["labels"].squeeze().to(device)
             embeddings = batch["emb"].to(device)
             outputs = classifier(embeddings)
             if test_ds.get_number_of_labels() > 2:
-                pass
+                metric = MultilabelAccuracy()
+                metric.update(outputs, torch.where(targets > 0, 1, 0))
+                multilabel_acc += metric.compute()
+                # pass
                 # code to save results in .tsv
             else:
                 proba = torch.nn.functional.softmax(outputs)
@@ -396,6 +402,15 @@ def train_classifier_from_stored_single_gpu(config):
                         )
                     )
                     writer.writerows(content)
+
+                acc += accuracy_score(
+                    torch.argmax(targets, dim=1).cpu(),
+                    torch.argmax(outputs, dim=1).cpu(),
+                )
+                f1 += f1_score(
+                    torch.argmax(targets, dim=1).cpu(),
+                    torch.argmax(outputs, dim=1).cpu(),
+                )
 
         if test_ds.get_number_of_labels() > 2:
             multilabel_acc = multilabel_acc / len(test_dataloader)
