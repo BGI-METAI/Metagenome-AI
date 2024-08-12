@@ -50,7 +50,9 @@ class EsmEmbedding(Embedding):
         # The first token of every sequence is always a special classification token ([CLS]).
         # The final hidden state corresponding to this token is used as the aggregate sequence representation
         # for classification tasks.
-        return self._pooling(self.pooling, esm_result["logits"], batch_tokens, self.alphabet.padding_idx)
+        return self._pooling(
+            self.pooling, esm_result["logits"], batch_tokens, self.alphabet.padding_idx
+        )
 
     def to(self, device):
         self.model = self.model.to(device)
@@ -99,8 +101,12 @@ class EsmEmbedding(Embedding):
 
         esm_result = esm_result["logits"].detach().cpu()
         mean_max_cls_embeddings = []
-        mean_embeddings = self._pooling("mean", esm_result, batch_tokens)
-        cls_embeddings = self._pooling("cls", esm_result, batch_tokens)
+        mean_embeddings = self._pooling(
+            "mean", esm_result, batch_tokens, self.alphabet.padding_idx
+        )
+        cls_embeddings = self._pooling(
+            "cls", esm_result, batch_tokens, self.alphabet.padding_idx
+        )
 
         for protein_id, mean_emb, cls_emb in zip(
             batch_labels, mean_embeddings, cls_embeddings
