@@ -1,11 +1,11 @@
 {
-    "program_mode5": "ONLY_STORE_EMBEDDINGS",
+    "program_mode": "ONLY_STORE_EMBEDDINGS",
     "program_mode4": "TRAIN_PREDICT_FROM_STORED",
-    "program_mode": "RUN_ALL",
+    "program_mode3": "RUN_ALL",
 
-    "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_08_09_train.tsv",
-    "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_08_09_validation.tsv",
-    "test": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_08_09_test.tsv",
+    "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/mariana_trench/mariana_to_100.tsv",
+    "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/230628-AMPs_hainan_validated_by_experiment.tsv",
+    "test2": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_08_09_test.tsv",
     "emb_dir": "/home/share/huadjyin/home/vladimir/META_AI/datasets/AMP/all_embeddings_ptrans",
 
     "emb_type": "PTRANS",
@@ -14,13 +14,13 @@
     "max_tokens": 2500,
 
     "batch_size": 200,
-    "num_epochs": 30,
+    "num_epochs": 20,
     "lr": 1e-3,
 
     "label": "label",
     "model_folder": "ptrans_results",
     "model_basename": "ptrans_amp",
-    "preload": null,
+    "preload": "/home/share/huadjyin/home/vladimir/Metagenome-AI/ptrans_results/PTRANS_ptrans_amp29.pt",
     "experiment_name": "runs/ptrans_amp_new",
     "wandb_key": "ba8ab5025007d1a06c3129ba630ed65767461de7"
 }
