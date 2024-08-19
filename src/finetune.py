@@ -5,6 +5,13 @@ from torch.utils.data import DataLoader, TensorDataset
 import random
 import pandas as pd
 from tqdm import tqdm
+from pathlib import Path
+
+user_home = str(Path.home())
+print(user_home)
+
+esm_model_path=f"{user_home}/.cache/torch/hub/checkpoints/esm2_t33_650M_UR50D.pt"  # esm2_t33_650M_UR50D
+model_data = torch.load(str(esm_model_path), map_location="cpu")
 
 data = list()
 df_paths = ['/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_08_09.tsv', 
@@ -81,22 +88,20 @@ for epoch in range(num_epochs):
         logits = output["logits"]
         # Take the argmax of the logits to get the predicted amino acids
         # predictions = torch.argmax(logits, dim=-1)
-        
+
         # print(logits.size(), labels.size())
         # print(logits.view(-1, logits.size(-1)).size(), labels.view(-1).size())
         # Compute loss for masked language modeling
         # argmax on 33 size vector (size of vocabulary) is performed inside CrossEntropyLoss function
-        loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))  
+        loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
         loss.backward()
         optimizer.step()
-        
+
     print(f"Epoch: {epoch}, Loss: {loss.item()}")
 
     # Save the fine-tuned model
     # torch.save(model.state_dict(), f"fine_tuned_esm2_20perc_masked_model_{epoch}.pth")
-    torch.save({"model": model.state_dict(), "args":{}, "cfg":{"epoch": epoch, "base_model": "esm2_t33_650M_UR50D", "max_mask_probability": max_mask_prob} },
-    f"esm2_{int(max_mask_prob*100)}_perc_masked_model_{epoch}.pt"
-)
-
-# Switch back to evaluation mode after fine-tuning
-# model.eval()
+    # torch.save({"model": model.state_dict(), "args":{}, "cfg":{"epoch": epoch, "base_model": "esm2_t33_650M_UR50D", "max_mask_probability": max_mask_prob} },
+    # f"esm2_{int(max_mask_prob*100)}_perc_masked_model_{epoch}.pt"
+    torch.save({"model": model.state_dict(), "args": model_data['args'], "cfg": model_data['cfg']},
+    f"esm2_{int(max_mask_prob*100)}_perc_masked_model_{epoch}.pt")
