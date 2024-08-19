@@ -10,7 +10,11 @@ from pathlib import Path
 user_home = str(Path.home())
 print(user_home)
 
+# Load the pre-trained ESM-2 model and its alphabet, this makes sure that model is in .cache
+model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
+
 esm_model_path=f"{user_home}/.cache/torch/hub/checkpoints/esm2_t33_650M_UR50D.pt"  # esm2_t33_650M_UR50D
+contact_regression_model = torch.load(f"{user_home}/.cache/torch/hub/checkpoints/esm2_t33_650M_UR50D-contact-regression.pt")
 model_data = torch.load(str(esm_model_path), map_location="cpu")
 
 data = list()
@@ -31,8 +35,6 @@ print(f'Size of fine-tuning data: {len(data)}')
 # Check if a GPU is available, otherwise use CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f'Using device: {device}')
-# Load the pre-trained ESM-2 model and its alphabet
-model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
 # model, alphabet = esm.pretrained.esm2_t6_8M_UR50D()
 model = model.to(device)
 batch_converter = alphabet.get_batch_converter()
@@ -105,3 +107,9 @@ for epoch in range(num_epochs):
     # f"esm2_{int(max_mask_prob*100)}_perc_masked_model_{epoch}.pt"
     torch.save({"model": model.state_dict(), "args": model_data['args'], "cfg": model_data['cfg']},
     f"esm2_{int(max_mask_prob*100)}_perc_masked_model_{epoch}.pt")
+
+    # Save contact regression model as well because esm.pretrained.load_model_and_alphabet
+    # requires this file named the same like model with suffix -contact-regression.pt
+    torch.save(contact_regression_model, f"esm2_{int(max_mask_prob*100)}_perc_masked_model_{epoch}-contact-regression.pt")
+
+
