@@ -48,7 +48,7 @@ if model_type == 'ESM':
     contact_regression_model = torch.load(f"{user_home}/.cache/torch/hub/checkpoints/esm2_t33_650M_UR50D-contact-regression.pt")
     model_data = torch.load(str(model_path), map_location="cpu")
 else:  # PTRANS
-    model_path = f"{user_home}/Metagenome-AI/framework/prot_t5_xl_uniref50"
+    model_path = f"{user_home}/Metagenome-AI/models/prot_t5_xl_uniref50"
     alphabet = T5Tokenizer.from_pretrained(model_path, do_lower_case=False, local_files_only=True, legacy=False)
     model = T5EncoderWithLinearDecoder(model_path)
 print(f'Number of parameters in {model_path} model: ', sum(p.numel() for p in  model.parameters()))
