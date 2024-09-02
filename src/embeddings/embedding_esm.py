@@ -19,7 +19,11 @@ from embeddings.embedding import Embedding
 
 
 class EsmEmbedding(Embedding):
-    def __init__(self, pooling="mean", esm_model_path="esm2_t33_650M_UR50D"):
+    def __init__(self, config, pooling="mean"):
+        if "esm_model_path" in config:
+            esm_model_path = config["esm_model_path"]
+        else:
+            esm_model_path = "esm2_t33_650M_UR50D"
         model, alphabet = esm.pretrained.load_model_and_alphabet(esm_model_path)
         # model, alphabet = esm.pretrained.esm2_t12_35M_UR50D()
         self.model = model
