@@ -134,7 +134,7 @@ def choose_llm(config):
         Embedding: A subclass of class Embedding
     """
     if config["emb_type"] == "ESM":
-        return embeddings.EsmEmbedding()
+        return embeddings.EsmEmbedding(config)
     elif config["emb_type"] == "ESM3":
         return embeddings.Esm3Embedding()
     elif config["emb_type"] == "PTRANS":
