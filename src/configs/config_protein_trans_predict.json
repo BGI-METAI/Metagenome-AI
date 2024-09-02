@@ -9,7 +9,7 @@
     "emb_dir": "/home/share/huadjyin/home/vladimir/META_AI/datasets/AMP/all_embeddings_ptrans",
 
     "emb_type": "PTRANS",
-    "prot_trans_model_path": "/home/share/huadjyin/home/vladimir/Metagenome-AI/framework/prot_t5_xl_uniref50",
+    "prot_trans_model_path": "/home/share/huadjyin/home/vladimir/Metagenome-AI/models/prot_t5_xl_uniref50",
     "prot_trans_model_name": "prot_t5_xl_uniref50",
     "max_tokens": 2500,
 
