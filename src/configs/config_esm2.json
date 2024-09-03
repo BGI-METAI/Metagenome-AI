@@ -1,0 +1,20 @@
+{
+"emb_dir": "results/tox",
+"program_mode": "RUN_ALL",
+"train": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/toxicity/amp_toxicity_train.csv",
+"test": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/toxicity/amp_toxicity_test.csv",
+"valid": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/toxicity/amp_toxicity_validation.csv",
+"emb_type": "ESM", 
+"max_tokens": 2000,
+"batch_size": 128,
+"num_epochs": 50,
+"lr": 1e-3,
+"label": "label",
+"sequence": "original",
+"max_seq_len": null,
+"model_folder": "weights",
+"model_basename": "esm_model_tox_",
+"model_path": null,
+"experiment_name": "runs/esmSmall",
+"wandb_key": "66bdf7f04d7842bb591556f5263dd9c779ca1ce7" 
+}
