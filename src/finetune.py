@@ -47,7 +47,7 @@ def finetuine(config):
     for key in ['train', 'test', 'valid']:
         if key in config and os.path.exists(config[key]):
             df = pd.read_csv(config[key], header=None, sep=config['separator_data_finetune'])
-            for _, row in df.iterrows():
+            for ind, row in df.iterrows():
                 if config["model_type"] == 'ESM':
                     data.append((row[0], row[2]))
                 else:  # PTRANS
