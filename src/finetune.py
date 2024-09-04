@@ -1,3 +1,4 @@
+import os
 import re
 import argparse
 import torch
@@ -43,16 +44,14 @@ def finetuine(config):
     print(f'Number of parameters in {model_path} model: ', sum(p.numel() for p in  model.parameters()))
 
     data = list()
-    df_path = config['path_data_finetune']
-    sep = config['separator_data_finetune']
-    df = pd.read_csv(df_path, header=None, sep=sep)
-    for ind, row in df.iterrows():
-        if config["model_type"] == 'ESM':
-            data.append( (row[0], row[2]) )
-        else:  # PTRANS
-            data.append(row[2])
-
-
+    for key in ['train', 'test', 'valid']:
+        if key in config and os.path.exists(config[key]):
+            df = pd.read_csv(config[key], header=None, sep=config['separator_data_finetune'])
+            for _, row in df.iterrows():
+                if config["model_type"] == 'ESM':
+                    data.append((row[0], row[2]))
+                else:  # PTRANS
+                    data.append(row[2])
     print(f'Size of fine-tuning data: {len(data)}')
 
     # Check if a GPU is available, otherwise use CPU
@@ -78,7 +77,6 @@ def finetuine(config):
 
     mask_idx = alphabet.mask_idx  if config["model_type"] == 'ESM' else alphabet.unk_token_id  # torch.tensor(alphabet.mask_idx).to(device)
     pad_idx = alphabet.padding_idx if config["model_type"] == 'ESM' else alphabet.pad_token_id  # torch.tensor(alphabet.padding_idx).to(device)
-
 
     # Prepare a dataset and dataloader for batching
     dataset = TensorDataset(batch_tokens)
@@ -162,7 +160,6 @@ def finetuine(config):
     return finetuned_output_file
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-c",
