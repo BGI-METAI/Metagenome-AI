@@ -9,6 +9,7 @@
 @Desc    :   None
 """
 
+import os
 import esm
 import torch
 from torch.nn import Identity
@@ -27,6 +28,10 @@ class EsmEmbedding(Embedding):
         model, alphabet = esm.pretrained.load_model_and_alphabet(esm_model_path)
         # model, alphabet = esm.pretrained.esm2_t12_35M_UR50D()
         self.model = model
+        
+        if ('finetune_model_path' in config) and os.path.exists(config['finetune_model_path']):
+            self.model.load_state_dict(torch.load(config['finetune_model_path']))
+
         self.alphabet = alphabet
         self.model.contact_head = Identity()
         self.model.emb_layer_norm_after = Identity()
