@@ -1,47 +1,56 @@
-import os
-import re
 import argparse
-import torch
-import esm
+import datetime
 import json
+import logging
+import os
+import random
+import re
+from pathlib import Path
+
+import pandas as pd
+import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader, TensorDataset
-import random
-import pandas as pd
 from tqdm import tqdm
-from pathlib import Path
-from transformers import T5ForConditionalGeneration, T5Tokenizer, T5EncoderModel
+from transformers import T5EncoderModel, T5ForConditionalGeneration, T5Tokenizer
 
+import esm
 
 class T5EncoderWithLinearDecoder(torch.nn.Module):
     def __init__(self, model_name='Rostlab/prot_t5_xl_uniref50'):
         super(T5EncoderWithLinearDecoder, self).__init__()
         self.encoder = T5EncoderModel.from_pretrained(model_name)
         self.linear = torch.nn.Linear(self.encoder.config.d_model, self.encoder.config.vocab_size)
-        # self.relu = torch.nn.ReLU()
 
     def forward(self, input_ids, attention_mask=None):
         encoder_outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
         hidden_states = encoder_outputs.last_hidden_state
         logits = self.linear(hidden_states)
-        # logits = self.relu(logits)  # Applying ReLU
         return logits
 
-def finetuine(config):
+def finetune(config):
+    timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+    logging.basicConfig(
+        level=logging.DEBUG,  # Set the log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        format='%(asctime)s - %(levelname)s - %(message)s',  # Include date and time in the log
+        datefmt='%Y-%m-%d %H:%M:%S',  # Set the format of the date and time
+        filename=f"{config['model_type']}_{timestamp}.log",
+    )
+
     user_home = str(Path.home())
-    print(user_home)
+    logging.info(user_home)
     
     if config["model_type"] == 'ESM':
-        # Load the pre-trained ESM-2 model and its alphabet, this makes sure that model is in .cache
-        model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
-        model_path=f"{user_home}/.cache/torch/hub/checkpoints/esm2_t33_650M_UR50D.pt"  # esm2_t33_650M_UR50D
-        # contact_regression_model = torch.load(f"{user_home}/.cache/torch/hub/checkpoints/esm2_t33_650M_UR50D-contact-regression.pt")
-        # model_data = torch.load(str(model_path), map_location="cpu")
+        if "model_name_or_path" in config:
+            esm_model_path = config["model_name_or_path"]
+        else:
+            esm_model_path = "esm2_t33_650M_UR50D"
+        model, alphabet = esm.pretrained.load_model_and_alphabet(esm_model_path)
     else:  # PTRANS
         model_path = config['ptrans_model_name_or_path']
         alphabet = T5Tokenizer.from_pretrained(model_path, do_lower_case=False, local_files_only=True, legacy=False)
         model = T5EncoderWithLinearDecoder(model_path)
-    print(f'Number of parameters in {model_path} model: ', sum(p.numel() for p in  model.parameters()))
+    logging.info(f"Number of parameters in {config['model_type']} model: {sum(p.numel() for p in model.parameters())}")
 
     data = list()
     for key in ['train', 'test', 'valid']:
@@ -52,12 +61,11 @@ def finetuine(config):
                     data.append((row[0], row[2]))
                 else:  # PTRANS
                     data.append(row[2])
-    print(f'Size of fine-tuning data: {len(data)}')
+    logging.info(f'Size of fine-tuning data: {len(data)}')
 
     # Check if a GPU is available, otherwise use CPU
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f'Using device: {device}')
-    # model, alphabet = esm.pretrained.esm2_t6_8M_UR50D()
+    logging.info(f'Using device: {device}')
     model = model.to(device)
 
     if config["model_type"] == 'ESM':
@@ -68,11 +76,6 @@ def finetuine(config):
         # this will replace all rare/ambiguous amino acids by X and introduce white-space between all amino acids
         data = [" ".join(list(re.sub(r"[UZOB]", "X", sequence))) for sequence in data]
         batch_tokens = alphabet.batch_encode_plus(data, add_special_tokens=True, padding=True) #make tokenization for all sequences, addpecial tokens, padding to the longest sequence
-        # input_ids = torch.tensor(batch_tokens['input_ids']).to(device)
-        # attention_mask = torch.tensor(batch_tokens['attention_mask']).to(device)
-        # with torch.no_grad():
-        #     embedding = model(input_ids=input_ids, attention_mask=attention_mask)
-        # batch_tokens = torch.tensor(list(zip(batch_tokens['input_ids'], batch_tokens['attention_mask'])))
         batch_tokens = torch.tensor(list(batch_tokens['input_ids']))
 
     mask_idx = alphabet.mask_idx  if config["model_type"] == 'ESM' else alphabet.unk_token_id  # torch.tensor(alphabet.mask_idx).to(device)
@@ -91,13 +94,10 @@ def finetuine(config):
     def mask_tokens(tokens, mask_idx, pad_idx, mask_prob=max_mask_prob):
         masked_tokens = tokens.clone()
         current_mask_prob = random.random() * max_mask_prob
-
         # Create a mask based on the probability
         mask = (torch.rand(tokens.shape) < current_mask_prob) & (tokens != pad_idx)
-
         # Replace masked positions with the mask index
         masked_tokens[mask] = mask_idx  # TODO: Replace with some other token instead MASK token or leave unchanged
-
         return masked_tokens
 
     # Enable training mode
@@ -108,7 +108,6 @@ def finetuine(config):
     for epoch in range(config["num_epochs_finetune"]):
         total_loss = 0
         for batch in tqdm(dataloader):
-            # batch_tokens = batch[0]
             optimizer.zero_grad()
 
             if config["model_type"] == 'ESM':
@@ -116,7 +115,6 @@ def finetuine(config):
             else:
                 original_tokens = batch[0][0]
                 attention_mask = (original_tokens != pad_idx).long().to(device)
-                # attention_mask = torch.tensor(batch[0][0][1]).to(device)
 
             # Mask tokens
             masked_tokens = mask_tokens(original_tokens, mask_idx, pad_idx)
@@ -129,35 +127,24 @@ def finetuine(config):
                 output = model(masked_tokens, repr_layers=[33])
                 logits = output["logits"]
             else:  # PTRANS
-                # input_ids = torch.tensor(masked_tokens).to(device)
-                # attention_mask = torch.tensor(batch['attention_mask']).to(device)
                 logits = model(input_ids=masked_tokens.unsqueeze(0), attention_mask=attention_mask.unsqueeze(0))
             #  argmax on 33 size vector (size of vocabulary) is performed inside CrossEntropyLoss function
             loss = criterion(logits.view(-1, logits.size(-1)), original_tokens.view(-1))
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
-            if ind % 10 == 0:
-                print(f'Processing batch: {ind}, loss={loss.item()}, total_loss = {total_loss}')
 
         avg_loss = total_loss / len(data) 
-        print(f"Epoch {epoch+1}/{config['num_epochs_finetune']}, Loss: {avg_loss:.4f}")
+        logging.info(f"Epoch {epoch+1}/{config['num_epochs_finetune']}, Loss: {avg_loss:.4f}")
 
         # Save the fine-tuned model
+        finetuned_output_name = f"{config['model_type']}_finetuned_epoch_{epoch+1}.pt"
         if config["model_type"] == 'ESM':
-            finetuned_output_file = f"esm2_{int(max_mask_prob*100)}_perc_masked_model_{epoch}.pt"
+            # finetuned_output_name = f"esm2_{int(max_mask_prob*100)}_perc_masked_model_{epoch}.pt"
             torch.save(model.state_dict(), finetuned_output_file)
-            # torch.save({"model": model.state_dict(), "args": model_data['args'], "cfg": model_data['cfg']}, finetuned_output_file)
-            # Save contact regression model as well because esm.pretrained.load_model_and_alphabet
-            # requires this file named the same like model with suffix -contact-regression.pt
-            # torch.save(contact_regression_model, f"esm2_{int(max_mask_prob*100)}_perc_masked_model_{epoch}-contact-regression.pt")
         else:  # PTRANS
-            finetuned_output_file = f"ptrans_finetuned_epoch_{epoch+1}.pt"
             torch.save(model.state_dict(), finetuned_output_file)
-            # Load later with:
-            # model = T5EncoderWithLinearDecoder(model_name)
-            # model.load_state_dict(torch.load('custom_t5_encoder_with_linear_decoder.pth'))
-    return finetuned_output_file
+    return os.path.join(user_home,finetuned_output_name)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -166,11 +153,11 @@ if __name__ == "__main__":
         "--config_path",
         help="Determines the path to the config file.",
         type=str,
-        required=False,
-        default="ESM",
+        required=True,
+        default="config.json",
     )          
      
     args = parser.parse_args()
     with open(args.config_path) as file:
             config = json.load(file)
-    print(finetuine(config))
+    logging.info(finetune(config))
