@@ -34,7 +34,7 @@ def finetuine(config):
     if config["model_type"] == 'ESM':
         # Load the pre-trained ESM-2 model and its alphabet, this makes sure that model is in .cache
         model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
-        # model_path=f"{user_home}/.cache/torch/hub/checkpoints/esm2_t33_650M_UR50D.pt"  # esm2_t33_650M_UR50D
+        model_path=f"{user_home}/.cache/torch/hub/checkpoints/esm2_t33_650M_UR50D.pt"  # esm2_t33_650M_UR50D
         # contact_regression_model = torch.load(f"{user_home}/.cache/torch/hub/checkpoints/esm2_t33_650M_UR50D-contact-regression.pt")
         # model_data = torch.load(str(model_path), map_location="cpu")
     else:  # PTRANS
