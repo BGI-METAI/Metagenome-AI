@@ -410,6 +410,36 @@ def train_classifier_from_stored_single_gpu(config):
             f1 = f1 / len(test_dataloader)
             logger.info(f"[TEST SET] Accuracy: {acc*100:.2f}% F1: {f1*100:.2f}%")
 
+def check_path(config):
+    path = ''
+    if ('finetune_model_path' in config):
+        path = config['finetune_model_path']
+    else:
+        # logger.info("Parameter not specified, not doing finetuning.")
+        return False
+    # Check if the variable is empty
+    if not path:
+        logger.info("Empty input, not doing finetuning.")
+        return False
+    # Normalize the path to expand user (~) and remove trailing slashes
+    path = os.path.expanduser(path).rstrip('/')
+    # Check if it's the root directory
+    if path == '/':
+        logger.info(f'Doing finetunig and saving models into the root directory: {Path.home()}')
+        return True
+    # If the path exists
+    if os.path.exists(path):
+        # If it's a directory
+        if os.path.isdir(path):
+            logger.info(f'Doing finetunig and saving models into the specified directory: {path}')
+            return True
+        # If it's a file (assuming concrete model is a file)
+        elif os.path.isfile(path):
+            return False
+    else:
+        logger.info("Specified file or directory is not existing. Not doing finetuning.")
+        return False
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -446,5 +476,6 @@ if __name__ == "__main__":
         train_classifier_from_stored_single_gpu(config)
     elif config["program_mode"] == valid_modes[2]:  # RUN_ALL
         # mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
+        do_finetuning = check_path(config)
         store_embeddings(config)
         train_classifier_from_stored_single_gpu(config)
