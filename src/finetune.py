@@ -21,6 +21,7 @@ class T5EncoderWithLinearDecoder(torch.nn.Module):
         super(T5EncoderWithLinearDecoder, self).__init__()
         self.encoder = T5EncoderModel.from_pretrained(model_name)
         self.linear = torch.nn.Linear(self.encoder.config.d_model, self.encoder.config.vocab_size)
+        # self.relu = torch.nn.ReLU() # TODO:
 
     def forward(self, input_ids, attention_mask=None):
         encoder_outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
@@ -31,7 +32,7 @@ class T5EncoderWithLinearDecoder(torch.nn.Module):
 def finetune(config):
     timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
     logging.basicConfig(
-        level=logging.DEBUG,  # Set the log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        level=logging.WARNING,  # Set the log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         format='%(asctime)s - %(levelname)s - %(message)s',  # Include date and time in the log
         datefmt='%Y-%m-%d %H:%M:%S',  # Set the format of the date and time
         filename=f"{config['model_type']}_{timestamp}.log",
@@ -41,10 +42,7 @@ def finetune(config):
     logging.info(user_home)
     
     if config["model_type"] == 'ESM':
-        if "model_name_or_path" in config:
-            esm_model_path = config["model_name_or_path"]
-        else:
-            esm_model_path = "esm2_t33_650M_UR50D"
+        esm_model_path = config.get("model_name_or_path", "esm2_t33_650M_UR50D")
         model, alphabet = esm.pretrained.load_model_and_alphabet(esm_model_path)
     else:  # PTRANS
         model_path = config['ptrans_model_name_or_path']
@@ -53,6 +51,7 @@ def finetune(config):
     logging.info(f"Number of parameters in {config['model_type']} model: {sum(p.numel() for p in model.parameters())}")
 
     data = list()
+    # Combining train test and validation dataset to be used for finrtuning model
     for key in ['train', 'test', 'valid']:
         if key in config and os.path.exists(config[key]):
             df = pd.read_csv(config[key], header=None, sep=config['separator_data_finetune'])
@@ -65,7 +64,7 @@ def finetune(config):
 
     # Check if a GPU is available, otherwise use CPU
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logging.info(f'Using device: {device}')
+    logging.info(f'Finetuning model on: {device}')
     model = model.to(device)
 
     if config["model_type"] == 'ESM':
@@ -88,7 +87,7 @@ def finetune(config):
     # Define a loss function and optimizer
     criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
     optimizer = optim.Adam(model.parameters(), lr=1e-5)
-    max_mask_prob = 0.20
+    max_mask_prob = config["max_mask_prob"]
 
     # Masking function
     def mask_tokens(tokens, mask_idx, pad_idx, mask_prob=max_mask_prob):
@@ -107,12 +106,12 @@ def finetune(config):
     finetuned_output_file = ''
     for epoch in range(config["num_epochs_finetune"]):
         total_loss = 0
-        for batch in tqdm(dataloader):
+        for ind, batch in tqdm(dataloader):
             optimizer.zero_grad()
 
             if config["model_type"] == 'ESM':
                 original_tokens = batch[0]
-            else:
+            else: #PTRANS
                 original_tokens = batch[0][0]
                 attention_mask = (original_tokens != pad_idx).long().to(device)
 
@@ -133,6 +132,8 @@ def finetune(config):
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
+            if ind % 50 == 0:
+                logging.debug(f'Processing batch: {ind}, loss={loss.item()}, total_loss = {total_loss}')
 
         avg_loss = total_loss / len(data) 
         logging.info(f"Epoch {epoch+1}/{config['num_epochs_finetune']}, Loss: {avg_loss:.4f}")
@@ -140,7 +141,6 @@ def finetune(config):
         # Save the fine-tuned model
         finetuned_output_name = f"{config['model_type']}_finetuned_epoch_{epoch+1}.pt"
         if config["model_type"] == 'ESM':
-            # finetuned_output_name = f"esm2_{int(max_mask_prob*100)}_perc_masked_model_{epoch}.pt"
             torch.save(model.state_dict(), finetuned_output_file)
         else:  # PTRANS
             torch.save(model.state_dict(), finetuned_output_file)
@@ -154,7 +154,6 @@ if __name__ == "__main__":
         help="Determines the path to the config file.",
         type=str,
         required=True,
-        default="config.json",
     )          
      
     args = parser.parse_args()
