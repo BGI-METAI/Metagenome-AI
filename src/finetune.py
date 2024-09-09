@@ -54,7 +54,7 @@ def finetune(config):
     # Combining train test and validation dataset to be used for finrtuning model
     for key in ['train', 'test', 'valid']:
         if key in config and os.path.exists(config[key]):
-            df = pd.read_csv(config[key], header=None, sep=config['separator_data_finetune'])
+            df = pd.read_csv(config[key], header=None, sep='\t')
             for ind, row in df.iterrows():
                 if config["model_type"] == 'ESM':
                     data.append((row[0], row[2]))
@@ -106,7 +106,7 @@ def finetune(config):
     finetuned_output_file = ''
     for epoch in range(config["num_epochs_finetune"]):
         total_loss = 0
-        for ind, batch in tqdm(dataloader):
+        for ind, batch in enumerate(tqdm(dataloader)):
             optimizer.zero_grad()
 
             if config["model_type"] == 'ESM':
@@ -116,6 +116,8 @@ def finetune(config):
                 attention_mask = (original_tokens != pad_idx).long().to(device)
 
             # Mask tokens
+            if config["model_type"] == 'ESM': mask_idx = random.randint(4, 30) # All tokens can be seen using alphabet.tok_to_idx
+
             masked_tokens = mask_tokens(original_tokens, mask_idx, pad_idx)
             masked_tokens = masked_tokens.to(device)
             original_tokens = torch.tensor(original_tokens).to(device)  # Move original_tokens (labels) to GPU
