@@ -9,24 +9,31 @@
 @Desc    :   None
 """
 
+import os
 import esm
 import torch
 from torch.nn import Identity
 import pickle
 import pathlib
+import logging
 
 from embeddings.embedding import Embedding
 
 
 class EsmEmbedding(Embedding):
     def __init__(self, config, pooling="mean"):
-        if "esm_model_path" in config:
-            esm_model_path = config["esm_model_path"]
+        if "model_name_or_path" in config:
+            esm_model_path = config["model_name_or_path"]
         else:
             esm_model_path = "esm2_t33_650M_UR50D"
         model, alphabet = esm.pretrained.load_model_and_alphabet(esm_model_path)
         # model, alphabet = esm.pretrained.esm2_t12_35M_UR50D()
         self.model = model
+        
+        if ('finetune_model_path' in config) and os.path.exists(config['finetune_model_path']):
+            self.model.load_state_dict(torch.load(config['finetune_model_path']))
+            logging.info(f"Using finetuned moedel. Path: {config['finetune_model_path']}")
+
         self.alphabet = alphabet
         self.model.contact_head = Identity()
         self.model.emb_layer_norm_after = Identity()

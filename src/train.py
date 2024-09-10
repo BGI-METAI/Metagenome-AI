@@ -430,6 +430,8 @@ if __name__ == "__main__":
     wandb.login(key=config["wandb_key"])
     world_size = torch.cuda.device_count()
 
+    #TODO :add finetuning before everything
+
     valid_modes = ["ONLY_STORE_EMBEDDINGS", "TRAIN_PREDICT_FROM_STORED", "RUN_ALL"]
     if config["program_mode"] not in valid_modes:
         print(
