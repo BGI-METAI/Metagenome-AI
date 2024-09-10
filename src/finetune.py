@@ -13,7 +13,7 @@ from torch import nn, optim
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 from transformers import T5EncoderModel, T5ForConditionalGeneration, T5Tokenizer
-from transformers import get_linear_schedule_with_warmup
+from transformers import AdamW, get_linear_schedule_with_warmup
 
 import esm
 
@@ -88,8 +88,8 @@ def finetune(config):
     # Define a loss function
     criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
     # Setup optimizer and learning rate scheduler
-    optimizer = optim.AdamW(model.parameters(), lr=3e-5)
-    total_training_steps = (len(data) / config["batch_size_finetune"]) * config["num_epochs_finetune"]
+    optimizer = AdamW(model.parameters(), lr=3e-5)
+    total_training_steps = (len(data) // config["batch_size_finetune"]) * config["num_epochs_finetune"]
     num_warmup_steps = int(0.1 * total_training_steps)
     scheduler = get_linear_schedule_with_warmup(optimizer,
                                             num_warmup_steps=num_warmup_steps,
