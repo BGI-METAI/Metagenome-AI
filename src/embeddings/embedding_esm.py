@@ -32,7 +32,7 @@ class EsmEmbedding(Embedding):
         
         if ('finetune_model_path' in config) and os.path.exists(config['finetune_model_path']):
             self.model.load_state_dict(torch.load(config['finetune_model_path']))
-            logging.info('Using finetuned moedel.')
+            logging.info(f"Using finetuned moedel. Path: {config['finetune_model_path']}")
 
         self.alphabet = alphabet
         self.model.contact_head = Identity()
