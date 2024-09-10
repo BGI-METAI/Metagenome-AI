@@ -45,7 +45,7 @@ def finetune(config):
         esm_model_path = config.get("model_name_or_path", "esm2_t33_650M_UR50D")
         model, alphabet = esm.pretrained.load_model_and_alphabet(esm_model_path)
     else:  # PTRANS
-        model_path = config['ptrans_model_name_or_path']
+        model_path = config['model_name_or_path']
         alphabet = T5Tokenizer.from_pretrained(model_path, do_lower_case=False, local_files_only=True, legacy=False)
         model = T5EncoderWithLinearDecoder(model_path)
     logging.info(f"Number of parameters in {config['model_type']} model: {sum(p.numel() for p in model.parameters())}")
@@ -86,7 +86,7 @@ def finetune(config):
 
     # Define a loss function and optimizer
     criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
-    optimizer = optim.Adam(model.parameters(), lr=1e-5)
+    optimizer = optim.AdamW(model.parameters(), lr=1e-5)
     max_mask_prob = config["max_mask_prob"]
 
     # Masking function
@@ -112,7 +112,7 @@ def finetune(config):
             if config["model_type"] == 'ESM':
                 original_tokens = batch[0]
             else: #PTRANS
-                original_tokens = batch[0][0]
+                original_tokens = batch[0]
                 attention_mask = (original_tokens != pad_idx).long().to(device)
 
             # Mask tokens
@@ -128,7 +128,8 @@ def finetune(config):
                 output = model(masked_tokens, repr_layers=[33])
                 logits = output["logits"]
             else:  # PTRANS
-                logits = model(input_ids=masked_tokens.unsqueeze(0), attention_mask=attention_mask.unsqueeze(0))
+                # logits = model(input_ids=masked_tokens.unsqueeze(0), attention_mask=attention_mask.unsqueeze(0))
+                logits = model(input_ids=masked_tokens, attention_mask=attention_mask)
             #  argmax on 33 size vector (size of vocabulary) is performed inside CrossEntropyLoss function
             loss = criterion(logits.view(-1, logits.size(-1)), original_tokens.view(-1))
             loss.backward()
