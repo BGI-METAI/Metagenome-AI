@@ -13,6 +13,7 @@ from torch import nn, optim
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 from transformers import T5EncoderModel, T5ForConditionalGeneration, T5Tokenizer
+from transformers import get_linear_schedule_with_warmup
 
 import esm
 
@@ -51,7 +52,7 @@ def finetune(config):
     logging.info(f"Number of parameters in {config['model_type']} model: {sum(p.numel() for p in model.parameters())}")
 
     data = list()
-    # Combining train test and validation dataset to be used for finrtuning model
+    # Combining train test and validation dataset to be used for finetuning model
     for key in ['train', 'test', 'valid']:
         if key in config and os.path.exists(config[key]):
             df = pd.read_csv(config[key], header=None, sep='\t')
@@ -84,9 +85,16 @@ def finetune(config):
     dataset = TensorDataset(batch_tokens)
     dataloader = DataLoader(dataset, batch_size=config["batch_size_finetune"], shuffle=True)
 
-    # Define a loss function and optimizer
+    # Define a loss function
     criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
-    optimizer = optim.AdamW(model.parameters(), lr=1e-5)
+    # Setup optimizer and learning rate scheduler
+    optimizer = optim.AdamW(model.parameters(), lr=3e-5)
+    total_training_steps = (len(data) / config["batch_size_finetune"]) * config["num_epochs_finetune"]
+    num_warmup_steps = int(0.1 * total_training_steps)
+    scheduler = get_linear_schedule_with_warmup(optimizer,
+                                            num_warmup_steps=num_warmup_steps,
+                                            num_training_steps=total_training_steps)
+
     max_mask_prob = config["max_mask_prob"]
 
     # Masking function
@@ -128,12 +136,12 @@ def finetune(config):
                 output = model(masked_tokens, repr_layers=[33])
                 logits = output["logits"]
             else:  # PTRANS
-                # logits = model(input_ids=masked_tokens.unsqueeze(0), attention_mask=attention_mask.unsqueeze(0))
                 logits = model(input_ids=masked_tokens, attention_mask=attention_mask)
             #  argmax on 33 size vector (size of vocabulary) is performed inside CrossEntropyLoss function
             loss = criterion(logits.view(-1, logits.size(-1)), original_tokens.view(-1))
             loss.backward()
             optimizer.step()
+            scheduler.step()
             total_loss += loss.item()
             if ind % 50 == 0:
                 logging.debug(f'Processing batch: {ind}, loss={loss.item()}, total_loss = {total_loss}')
@@ -146,7 +154,7 @@ def finetune(config):
         if config["model_type"] == 'ESM':
             torch.save(model.state_dict(), finetuned_output_file)
         else:  # PTRANS
-            torch.save(model.state_dict(), finetuned_output_file)
+            torch.save(model.encoder.state_dict(), finetuned_output_file)
     return os.path.join(user_home,finetuned_output_name)
 
 if __name__ == "__main__":
