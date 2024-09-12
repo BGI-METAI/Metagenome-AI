@@ -16,7 +16,7 @@ from embeddings.embedding import Embedding
 class ProteinTransEmbedding(Embedding):
     def __init__(self, config):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model_name = config['ptrans_model_name_or_path']
+        self.model_name = config['model_name_or_path']
         #Load the ProtTrans model and ProtTrans tokenizer
         # https://huggingface.co/Rostlab
         # Available models in Rostlab:
