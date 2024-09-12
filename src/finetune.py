@@ -152,9 +152,10 @@ def finetune(config):
         # Save the fine-tuned model
         finetuned_output_name = f"{config['model_type']}_finetuned_epoch_{epoch+1}.pt"
         if config["model_type"] == 'ESM':
-            torch.save(model.state_dict(), finetuned_output_file)
+            torch.save(model.state_dict(), finetuned_output_name)
         else:  # PTRANS
-            torch.save(model.encoder.state_dict(), finetuned_output_file)
+            torch.save(model.encoder.state_dict(), finetuned_output_name)
+        logging.info(f"Saved model name: {finetuned_output_name}")
     return os.path.join(user_home,finetuned_output_name)
 
 if __name__ == "__main__":
