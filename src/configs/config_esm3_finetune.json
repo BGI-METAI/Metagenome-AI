@@ -1,0 +1,27 @@
+{
+    "program_mode": "RUN_ALL",
+
+    "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_merged_all.tsv",
+    "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_08_09.tsv",
+    "test": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/ripp_corepep.tsv",
+    "emb_dir": "/home/share/huadjyin/home/vladimir/Metagenome-AI/embeddings/all_embeddings_esm",
+
+    "emb_type": "ESM3",
+    "max_tokens": 2500,
+
+    "model_type":"ESM3",
+    "max_mask_prob": 0.20,
+    "batch_size_finetune":16,
+    "num_epochs_finetune":50,
+
+    "batch_size": 200,
+    "num_epochs": 30,
+    "lr": 1e-3,
+
+    "label": "label",
+    "model_folder": "esm3_results",
+    "model_basename": "esm3_amp",
+    "preload": null,
+    "experiment_name": "runs/esm3_amp_new",
+    "wandb_key": "ba8ab5025007d1a06c3129ba630ed65767461de7"
+}
