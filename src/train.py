@@ -46,11 +46,11 @@ from utils.early_stopper import EarlyStopper
 import embeddings
 
 
-def init_logger(timestamp):
+def init_logger(config, timestamp):
     logging.basicConfig(
-        format="%(name)-12s %(levelname)-8s %(message)s",
+        format="%(asctime)s - %(levelname)s - %(message)s",
         level=logging.INFO,
-        filename=f"{timestamp}.log",
+        filename=f"{config['model_type']}_{config['program_mode']}_{timestamp}.log",
     )
     return logging.getLogger(__name__)
 
@@ -144,29 +144,33 @@ def choose_llm(config):
     raise NotImplementedError("This type of embedding is not supported")
 
 
-def store_embeddings(config):
+def store_embeddings(config, logger):
     world_size = torch.cuda.device_count()
+    logger.info("Starts saving embeddings.")
     if "train" in config and config["train"] is not None:
+        logger.info("Storing embedding from a train dataset.")
         mp.spawn(
             _store_embeddings,
-            args=(config, world_size, config["train"]),
+            args=(config, logger, world_size, config["train"]),
             nprocs=world_size,
         )
     if "valid" in config and config["valid"] is not None:
+        logger.info("Storing embedding from a validation dataset.")
         mp.spawn(
             _store_embeddings,
-            args=(config, world_size, config["valid"]),
+            args=(config, logger, world_size, config["valid"]),
             nprocs=world_size,
         )
     if "test" in config and config["test"] is not None:
+        logger.info("Storing embedding from a test dataset.")
         mp.spawn(
             _store_embeddings,
-            args=(config, world_size, config["test"]),
+            args=(config, logger, world_size, config["test"]),
             nprocs=world_size,
         )
 
 
-def _store_embeddings(rank, config, world_size, data_path):
+def _store_embeddings(rank, config, logger, world_size, data_path):
     try:
         ddp_setup(rank, world_size)
         device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
@@ -191,9 +195,6 @@ def _store_embeddings(rank, config, world_size, data_path):
 
         llm = choose_llm(config)
         llm.to(device)
-
-        timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
-        logger = init_logger(timestamp)
 
         dist.barrier()
 
@@ -325,7 +326,7 @@ def train_loop(config, logger, train_ds, valid_ds, timestamp):
             },
             model_filename,
         )
-        logging.warning(f"Finished epoch: {epoch}")
+        logging.warning(f"Finished epoch: {epoch + 1}")
         # log some metrics on batches and some metrics only on epochs
         # wandb.log({"batch": batch_idx, "loss": 0.3})
         # wandb.log({"epoch": epoch, "val_acc": 0.94})
@@ -334,10 +335,11 @@ def train_loop(config, logger, train_ds, valid_ds, timestamp):
     return classifier
 
 
-def train_classifier_from_stored_single_gpu(config):
+def train_classifier_from_stored_single_gpu(config, logger):
+
+    logger.info("Starts classifier training.")
+
     device = torch.device(f"cuda" if torch.cuda.is_available() else "cpu")
-    timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
-    logger = init_logger(timestamp)
 
     train_ds = TSVDataset(config["train"], config["emb_dir"], "mean")
     valid_ds = TSVDataset(config["valid"], config["emb_dir"], "mean")
@@ -430,6 +432,12 @@ if __name__ == "__main__":
     wandb.login(key=config["wandb_key"])
     world_size = torch.cuda.device_count()
 
+    timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+    logger = init_logger(config, timestamp)
+    logger.info(config) # Prints the whole config file into lof file.
+
+    #TODO :add finetuning before everything
+
     valid_modes = ["ONLY_STORE_EMBEDDINGS", "TRAIN_PREDICT_FROM_STORED", "RUN_ALL"]
     if config["program_mode"] not in valid_modes:
         print(
@@ -441,10 +449,10 @@ if __name__ == "__main__":
 
     if config["program_mode"] == valid_modes[0]:  # ONLY_STORE_EMBEDDINGS
         # mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
-        store_embeddings(config)
+        store_embeddings(config, logger)
     elif config["program_mode"] == valid_modes[1]:  # TRAIN_PREDICT_FROM_STORED
-        train_classifier_from_stored_single_gpu(config)
+        train_classifier_from_stored_single_gpu(config, logger)
     elif config["program_mode"] == valid_modes[2]:  # RUN_ALL
         # mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
-        store_embeddings(config)
-        train_classifier_from_stored_single_gpu(config)
+        store_embeddings(config, logger)
+        train_classifier_from_stored_single_gpu(config, logger)
