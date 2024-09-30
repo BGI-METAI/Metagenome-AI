@@ -17,10 +17,10 @@ from pathlib import Path
 import csv
 import socket
 
-from matplotlib import pyplot as plt
-import datasets
-import pandas as pd
-import pyarrow as pa
+# from matplotlib import pyplot as plt
+# import datasets
+# import pandas as pd
+# import pyarrow as pa
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, f1_score
 import torch
@@ -29,7 +29,7 @@ from torch.utils import data
 from torch.optim.lr_scheduler import StepLR, LinearLR
 
 # from torcheval.metrics import MultilabelAccuracy
-from tqdm import tqdm
+# from tqdm import tqdm
 import wandb
 import time
 
@@ -136,7 +136,7 @@ def choose_llm(config):
     if config["emb_type"] == "ESM":
         return embeddings.EsmEmbedding(config)
     elif config["emb_type"] == "ESM3":
-        return embeddings.Esm3Embedding()
+        return embeddings.Esm3Embedding(config)
     elif config["emb_type"] == "PTRANS":
         return embeddings.ProteinTransEmbedding(config)
     elif config["emb_type"] == "PVEC":
