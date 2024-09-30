@@ -6,7 +6,6 @@
 "test": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/tox_merged/tox_test.tsv",
 "valid": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/tox_merged/tox_validation.tsv",
 
-"emb_type": "ESM3",
 "model_type": "ESM3",
 "max_tokens": 2000,
 

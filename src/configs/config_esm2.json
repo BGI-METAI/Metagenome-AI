@@ -1,10 +1,10 @@
 {
 "emb_dir": "results/esm_amp",
 "program_mode": "TRAIN_PREDICT_FROM_STORED",
-"train": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/AMP/AMP_2024_08_09_train.tsv",
-"test": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/ripp_corepep.tsv",
-"valid": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/AMP/AMP_2024_08_09_validation.tsv",
-"emb_type": "ESM", 
+"train": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/tox_merged/tox_train.tsv",
+"test": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/tox_merged/tox_test.tsv",
+"valid": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/tox_merged/tox_validation.tsv",
+"model_type": "ESM", 
 "max_tokens": 2000,
 "batch_size": 64,
 "num_epochs": 60,
@@ -14,7 +14,7 @@
 "max_seq_len": null,
 "model_folder": "weights",
 "model_basename": "esm_model_ama",
-"model_path": null,
+"classifier_path": null,
 "experiment_name": "runs/esmSmall",
 "wandb_key": "66bdf7f04d7842bb591556f5263dd9c779ca1ce7" 
 }
