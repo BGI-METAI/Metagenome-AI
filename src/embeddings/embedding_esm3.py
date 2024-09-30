@@ -34,8 +34,8 @@ class Esm3Embedding(EsmEmbedding):
         # model: ESM3InferenceClient = ESM3.from_pretrained("esm3_sm_open_v1").to("cuda") # or "cpu"
         model = ESM3_sm_open_v0("cuda")
         self.model = model
-        if "esm3_model_path" in config and os.path.exists(config['esm3_model_path']):
-            self.model.load_state_dict(torch.load(config['esm3_model_path']))
+        if "finetune_model_path" in config and os.path.exists(config['finetune_model_path']):
+            self.model.load_state_dict(torch.load(config['finetune_model_path']))
         self.alphabet = EsmSequenceTokenizer()  # model.get_structure_token_encoder()  #
         # self.model.structure_encoder = Identity()
         self.model.eval()

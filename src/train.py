@@ -11,16 +11,14 @@
 import argparse
 import datetime
 import logging
+import json
 import warnings
 import os
 from pathlib import Path
 import csv
 import socket
 
-# from matplotlib import pyplot as plt
-# import datasets
 # import pandas as pd
-# import pyarrow as pa
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, f1_score
 import torch
@@ -29,7 +27,6 @@ from torch.utils import data
 from torch.optim.lr_scheduler import StepLR, LinearLR
 
 # from torcheval.metrics import MultilabelAccuracy
-# from tqdm import tqdm
 import wandb
 import time
 
@@ -350,12 +347,12 @@ def train_classifier_from_stored_single_gpu(config, logger):
         batch_size=config["batch_size"],
     )
 
-    if "model_path" in config and config["model_path"] is not None:
+    if "classifier_path" in config and config["classifier_path"] is not None:
         llm = choose_llm(config)
         d_model = llm.get_embedding_dim()
         classifier = MLPClassifier(d_model, train_ds.get_number_of_labels()).to(device)
-        print(f"Loading model: {config['model_path']}")
-        state = torch.load(config["model_path"])
+        print(f"Loading model: {config['classifier_path']}")
+        state = torch.load(config["classifier_path"])
         classifier.load_state_dict(state["model_state_dict"])
     else:
         classifier = train_loop(config, logger, train_ds, valid_ds, timestamp)
@@ -434,7 +431,7 @@ if __name__ == "__main__":
 
     timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
     logger = init_logger(config, timestamp)
-    logger.info(config) # Prints the whole config file into lof file.
+    logger.info(json.dumps(config, indent = 4))
 
     #TODO :add finetuning before everything
 
