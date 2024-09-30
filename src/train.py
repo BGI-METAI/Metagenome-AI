@@ -130,13 +130,13 @@ def choose_llm(config):
     Returns:
         Embedding: A subclass of class Embedding
     """
-    if config["emb_type"] == "ESM":
+    if config["model_type"] == "ESM":
         return embeddings.EsmEmbedding(config)
-    elif config["emb_type"] == "ESM3":
+    elif config["model_type"] == "ESM3":
         return embeddings.Esm3Embedding(config)
-    elif config["emb_type"] == "PTRANS":
+    elif config["model_type"] == "PTRANS":
         return embeddings.ProteinTransEmbedding(config)
-    elif config["emb_type"] == "PVEC":
+    elif config["model_type"] == "PVEC":
         return embeddings.ProteinVecEmbedding()
     raise NotImplementedError("This type of embedding is not supported")
 
