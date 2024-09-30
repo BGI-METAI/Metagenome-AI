@@ -19,8 +19,9 @@
 "max_seq_len": null,
 "model_folder": "weights",
 "model_basename": "esm3_model_testT",
-"esm3_model_path33": "ESM3_finetuned_epoch_2.pt",
+"finetune_model_path": "ESM3_finetuned_epoch_19.pt",
 "preload": null,
+"classifier_path": null,
 "experiment_name": "runs/esmSmall",
 "wandb_key": "66bdf7f04d7842bb591556f5263dd9c779ca1ce7" 
 }
