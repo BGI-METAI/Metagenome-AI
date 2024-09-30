@@ -1,25 +1,26 @@
 {
-"sequences_path": "/goofys/projects/MAI/data/AMP_dataset/AMP_dataset.csv",
-"emb_dir": "results/esm3",
-"program_mode": "ONLY_STORE_EMBEDDINGS",
+"emb_dir": "results/tox_esm3ft2",
+"program_mode": "RUN_ALL",
 
-"train": "/goofys/projects/MAI/data/AMP_dataset/AMP_dataset_train.csv",
-"test": "/goofys/projects/MAI/data/AMP_dataset/AMP_dataset_validation.csv",
-"valid": "/goofys/projects/MAI/data/AMP_dataset/AMP_dataset_test.csv",
+"train": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/tox_merged/tox_train.tsv",
+"test": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/tox_merged/tox_test.tsv",
+"valid": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/tox_merged/tox_validation.tsv",
 
 "emb_type": "ESM3",
-"max_tokens": 3000,
+"model_type": "ESM3",
+"max_tokens": 2000,
 
-"batch_size": 200,
-"num_epochs": 4,
+"batch_size": 64,
+"num_epochs": 60,
 "lr": 1e-3,
 
 "label": "label",
 "sequence": "original",
 "max_seq_len": null,
 "model_folder": "weights",
-"model_basename": "esm3_model_",
+"model_basename": "esm3_model_testT",
+"esm3_model_path33": "ESM3_finetuned_epoch_2.pt",
 "preload": null,
 "experiment_name": "runs/esmSmall",
-"wandb_key": "8650f0776cd5b7c69f0049de35e2da564004f132" 
+"wandb_key": "66bdf7f04d7842bb591556f5263dd9c779ca1ce7" 
 }
