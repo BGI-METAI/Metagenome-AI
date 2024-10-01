@@ -1,0 +1,15 @@
+{
+    "model_type":"ESM",
+    "program_mode": "RUN_ALL",
+    "train": "data/sample_train.tsv",
+    "valid": "data/sample_validation.tsv",
+    "test": "data/sample_test.tsv",
+    "emb_dir": "emb_dir/sample",
+    "model_folder": "esm_results",
+    "wandb_key": "ba8ab5025007d1a06c3129ba630ed65767461de7",
+
+    "batch_size": 200,
+    "num_epochs": 50,
+    "lr": 1e-4,
+    "max_tokens": 2500
+}
