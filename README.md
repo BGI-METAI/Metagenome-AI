@@ -2,68 +2,49 @@
 
 ## Overview
 
-Provide a brief introduction to the project and its purpose.
+The framework for labeling and classification of protein sequences based on Large Protein models.
 
 ## Configuration Parameters
 
-1. `sequences_path` (String): Path to the file containing the protein sequences to be processed.
+| Parameter Name      | Description                                                                                               | Required | Default Value         |
+|---------------------|-----------------------------------------------------------------------------------------------------------|----------|-----------------------|
+| `model_type`        | Type of embedding model to be used. Options: `"ESM"`, `"ESM3"`, `"PTRANS"`, `"PVEC"`.                     | Yes      | `None`               |
+| `program_mode`      | Specifies the mode in which the program will run. Possible modes: ONLY_STORE_EMBEDDINGS (just store embeddings), TRAIN_PREDICT_FROM_STORED (just train classifier from stored embeddings), or RUN_ALL (store embeddings and train classifier). Default is RUN_ALL   | Yes      | `"RUN_ALL"`           |
+| `train`             | Path to the training dataset.                                                                              | Yes       | `None`                |
+| `valid`             | Path to the validation dataset. If validation dataset does not exist it can be same as test.              | Yes       | `None`                |
+| `test`              | Path to the test dataset.                                                                                 | Yes       | `None`                |
+| `emb_dir`           | Directory where embeddings will be stored.                                                                | Yes      | `None`                |
+| `model_folder`      | Folder to save the model checkpoints.                                                                     | Yes      | `None`                |
+| `wandb_key`         | API key for Weights and Biases tracking.                                                                  | Yes      | `None`                |
+| `batch_size`        | The batch size to use during training of the classifier.                                                  | No       | `32`                  |
+| `num_epochs`        | Number of epochs for training.                                                                            | No       | `10`                  |
+| `lr`                | Learning rate for the optimizer of the classifier.                                                                          | No       | `0.001`               |
+| `max_tokens`        | Maximum tokens to consider when loading data.                                                             | No       | `1024`                |
+| `early_stop_patience`| Number of epochs with no improvement after which training will be stopped.                               | No       | `4`                   |
+| `max_tokens`        | Maximum number of tokens per dataset split for the embedding process.                                     | No       | `2500`                |
+| `classifier_path`   | Path to a pre-trained model checkpoint to load instead of training classifier.                            | No       | `None`                |
+| `log_dir`           | Directory where log files will be saved.                                                                  | No       | `./logs/`             |
 
-2. `emb_dir` (String): Directory where the embeddings of the protein sequences will be stored. If you only train the model, provide here the path to the directory with saved embeddings.
-
-3. `program_mode` (Integer): Specifies the mode in which the program will run. Possible modes: ONLY_STORE_EMBEDDINGS (just store embeddings), TRAIN_PREDICT_FROM_STORED (just train classifier from stored embeddings), or RUN_ALL (store embeddings and train classifier). Default is `RUN_ALL`. 
-
-4. `train` (String): Path to the training dataset in CSV format.
-
-5. `test` (String): Path to the test dataset in CSV format.
-
-6. `valid` (String): Path to the validation dataset in CSV format.
-
-7. `emb_type` (String): Type of embeddings to be generated for the protein sequences. Availale: ESM, PTRANS, 
-
-8. `prot_trans_model_path` (String): Path to the pre-trained protein transformer model. If null, the model will be loaded from the specified name.
-
-9. `prot_trans_model_name` (String): Name of the pre-trained protein transformer model to be used. Default is `prot_t5_xl_uniref50`.
-
-10. `max_tokens` (Integer): Maximum number of tokens to be processed per batch. Default is `3000`.
-
-11. `batch_size` (Integer): Number of sequences to be processed in each batch. Default is `40`.
-
-12. `num_epochs` (Integer): Number of epochs for training the model. Default is `20`.
-
-13. `lr` (Float): Learning rate for the training process. Default is `1e-3`.
-
-14. `label` (String): Column name in the dataset that contains the labels. Default is `label`.
-
-15. `sequence` (String): Column name in the dataset that contains the sequences. Default is `original`.
-
-16. `max_seq_len` (Integer or Null): Maximum sequence length. If null, no maximum length is enforced. Default is `null`.
-
-17. `model_folder` (String): Directory where the trained model weights will be saved. Default is `weights`.
-
-18. `model_basename` (String): Base name for the saved model files. Default is `prot_model_`.
-
-19. `preload` (String): Path to the pre-trained model weights to be loaded. If null, training starts from scratch. Default is `null`.
-
-20. `experiment_name` (String): Name of the experiment, used for tracking and logging purposes. Default is`runs/esmSmall`
-
-21. `wandb_key` (String): API key for Weights & Biases (wandb) used for logging and tracking experiments.
+### Notes:
+- Required parameters **must** be present in the config file for the program to run.
+- If a parameter is not set in the config file, the default value will be used, if available.
 
 ## Installation
-
-Provide instructions on how to install and set up the project, including any dependencies.
-
+After cloning the repository:
+```cd Metagenome-AI
+conda create -n mai python==3.9
+conda activate mai
+pip install -r requirements.txt
+```
 ## Usage
 
-Explain how to use the project, including examples of how to configure the parameters in the configuration file.
+`python src/train.py -c src/configs/config_sample.json`
 
-## Contributing
-
-If you accept contributions, provide guidelines for how others can contribute to the project.
 
 ## License
 
-Specify the project's license.
+MIT
 
 ## Contact
 
-Provide contact information or links to relevant resources (e.g., issue tracker, mailing list).
+For all suggestions please create the Github issue or contact vladimirkovacevic@genomics.cn.
