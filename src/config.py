@@ -18,9 +18,6 @@ class ConfigProviderFactory:
     def get_config_provider(config_file):
         with open(config_file) as file:
             config = json.load(file)
-            # set default values
-            if "max_tokens" not in config:
-                config["max_tokens"] = 2000
             return config
 
 
