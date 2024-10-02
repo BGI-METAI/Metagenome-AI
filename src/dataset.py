@@ -19,30 +19,6 @@ import pickle
 from sklearn.preprocessing import MultiLabelBinarizer
 
 
-class CustomDataset(Dataset):
-    def __init__(self, dataset, config):
-        self.dataset = dataset
-        self.label = config["label"]
-        self.sequence = config["sequence"]
-        self.max_seq_len = config["max_seq_len"]
-
-    def __len__(self):
-        return len(self.dataset)
-
-    def __getitem__(self, idx):
-        seq_label_pair = self.dataset[idx]
-        sequence = (
-            seq_label_pair[self.sequence][: self.max_seq_len]
-            if self.max_seq_len
-            else seq_label_pair[self.sequence]
-        )
-        sample = {
-            "sequence": sequence,
-            "target": seq_label_pair["le_" + self.label],
-        }
-        return sample
-
-
 class TSVDataset(Dataset):
     def __init__(self, path, embeddings_dir=None, emb_type=None):
         if embeddings_dir is not None and emb_type is None:
@@ -88,11 +64,11 @@ class TSVDataset(Dataset):
 
 
 class MaxTokensLoader:
-    def __init__(self, dataset, max_tokens, start_ind, end_ind, drop_last=False):
+    def __init__(self, dataset, start_ind, end_ind, max_tokens, drop_last=False):
         self.dataset = dataset
-        self.max_tokens = max_tokens
         self.start_ind = start_ind
         self.end_ind = end_ind
+        self.max_tokens = max_tokens
         self.drop_last = drop_last
 
     def __iter__(self):

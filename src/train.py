@@ -11,25 +11,20 @@
 import argparse
 import datetime
 import logging
+import json
 import warnings
 import os
 from pathlib import Path
 import csv
 import socket
 
-from matplotlib import pyplot as plt
-import datasets
 import pandas as pd
-import pyarrow as pa
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import accuracy_score, f1_score
 import torch
 import torch.nn as nn
 from torch.utils import data
 from torch.optim.lr_scheduler import StepLR, LinearLR
 
 # from torcheval.metrics import MultilabelAccuracy
-from tqdm import tqdm
 import wandb
 import time
 
@@ -40,9 +35,10 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.distributed import init_process_group, destroy_process_group
 import torch.distributed as dist
 
-from dataset import CustomDataset, TSVDataset, MaxTokensLoader
+from dataset import TSVDataset, MaxTokensLoader
 from config import get_weights_file_path, ConfigProviderFactory
 from utils.early_stopper import EarlyStopper
+from utils.metrics import calc_metrics
 import embeddings
 
 
@@ -133,13 +129,13 @@ def choose_llm(config):
     Returns:
         Embedding: A subclass of class Embedding
     """
-    if config["emb_type"] == "ESM":
+    if config["model_type"] == "ESM":
         return embeddings.EsmEmbedding(config)
-    elif config["emb_type"] == "ESM3":
-        return embeddings.Esm3Embedding()
-    elif config["emb_type"] == "PTRANS":
+    elif config["model_type"] == "ESM3":
+        return embeddings.Esm3Embedding(config)
+    elif config["model_type"] == "PTRANS":
         return embeddings.ProteinTransEmbedding(config)
-    elif config["emb_type"] == "PVEC":
+    elif config["model_type"] == "PVEC":
         return embeddings.ProteinVecEmbedding()
     raise NotImplementedError("This type of embedding is not supported")
 
@@ -177,7 +173,7 @@ def _store_embeddings(rank, config, logger, world_size, data_path):
         Path(config["emb_dir"]).mkdir(parents=True, exist_ok=True)
 
         ds = TSVDataset(data_path)
-        max_tokens = config["max_tokens"]
+        max_tokens = config.get("max_tokens", 2000)
         chunk_size = len(ds) // world_size
         remainder = len(ds) % world_size
 
@@ -190,7 +186,7 @@ def _store_embeddings(rank, config, logger, world_size, data_path):
 
         # Each GPU gets its own part of the dataset
         dataloader = MaxTokensLoader(
-            ds, max_tokens, start_ind=indices[rank][0], end_ind=indices[rank][1]
+            ds, start_ind=indices[rank][0], end_ind=indices[rank][1], max_tokens=max_tokens
         )
 
         llm = choose_llm(config)
@@ -251,6 +247,7 @@ def train_loop(config, logger, train_ds, valid_ds, timestamp):
     # - 2-neuron output with only one correct class: softmax + categorical_crossentropy
     # - 1-neuron output, one class is 0, the other is 1: sigmoid + binary_crossentropy
     loss_function = nn.CrossEntropyLoss()
+    all_metrics_df = pd.DataFrame()
 
     for epoch in range(config["num_epochs"]):
         classifier.train()
@@ -275,29 +272,30 @@ def train_loop(config, logger, train_ds, valid_ds, timestamp):
         wandb.log({"train loss": train_loss})
 
         # Validation loop
+        # first collect all outputs and then forward to metrics
+        all_outputs = []
+        all_targets = []
         classifier.eval()
         with torch.no_grad():
-            acc = f1 = multilabel_acc = val_loss = 0
+            multilabel_acc = val_loss = 0
             for batch in valid_dataloader:
                 targets = batch["labels"].squeeze().to(device)
                 embeddings = batch["emb"].to(device)
                 outputs = classifier(embeddings)
                 loss = loss_function(outputs, targets)
                 val_loss += loss.item()
+                all_targets.append(targets.cpu())
+                all_outputs.append(outputs.cpu())
                 if valid_ds.get_number_of_labels() > 2:
                     # metric = MultilabelAccuracy(criteria="hamming")
                     metric = MultilabelAccuracy()
                     metric.update(outputs, torch.where(targets > 0, 1, 0))
                     multilabel_acc += metric.compute()
-                else:
-                    acc += accuracy_score(
-                        torch.argmax(targets, dim=1).cpu(),
-                        torch.argmax(outputs, dim=1).cpu(),
-                    )
-                    f1 += f1_score(
-                        torch.argmax(targets, dim=1).cpu(),
-                        torch.argmax(outputs, dim=1).cpu(),
-                    )
+
+            all_targets = torch.cat(all_targets)
+            all_outputs = torch.cat(all_outputs)
+            epoch_metrics = calc_metrics(all_targets, all_outputs)
+            all_metrics_df = pd.concat([all_metrics_df, epoch_metrics], ignore_index=True)
 
             val_loss = val_loss / len(valid_dataloader)
             wandb.log({"validation loss": val_loss})
@@ -306,12 +304,10 @@ def train_loop(config, logger, train_ds, valid_ds, timestamp):
                 multilabel_acc = multilabel_acc / len(valid_dataloader)
                 wandb.log({"validation multilabel accuracy": multilabel_acc})
             else:
-                acc = acc / len(valid_dataloader)
-                f1 = f1 / len(valid_dataloader)
-                wandb.log({"validation accuracy": acc})
-                wandb.log({"validation f1_score": f1})
+                wandb.log({"validation accuracy": epoch_metrics['Accuracy'][0]})
+                wandb.log({"validation f1_score": epoch_metrics['F1-score'][0]})
         logger.warning(
-            f"[VALIDATION SET] Accuracy: {acc:.2f} F1: {f1:.2f} Validation loss: {val_loss:.2f} Training loss: {train_loss:.2f}"
+            f"Validation loss: {val_loss:.2f} Training loss: {train_loss:.2f}"
         )
         if early_stopper.early_stop(val_loss):
             logger.warning(f"Early stopping in epoch {epoch}...")
@@ -330,6 +326,9 @@ def train_loop(config, logger, train_ds, valid_ds, timestamp):
         # log some metrics on batches and some metrics only on epochs
         # wandb.log({"batch": batch_idx, "loss": 0.3})
         # wandb.log({"epoch": epoch, "val_acc": 0.94})
+    all_metrics_df.index = all_metrics_df.index + 1
+    all_metrics_df = all_metrics_df.reset_index().rename(columns={'index': 'Epoch'})
+    logger.info(f"\nValidation set scores per epoch \n {all_metrics_df.to_string(index=False)}")
     wandb.unwatch()
     run.finish()
     return classifier
@@ -350,19 +349,21 @@ def train_classifier_from_stored_single_gpu(config, logger):
         batch_size=config["batch_size"],
     )
 
-    if "model_path" in config and config["model_path"] is not None:
+    if "classifier_path" in config and config["classifier_path"] is not None:
         llm = choose_llm(config)
         d_model = llm.get_embedding_dim()
         classifier = MLPClassifier(d_model, train_ds.get_number_of_labels()).to(device)
-        print(f"Loading model: {config['model_path']}")
-        state = torch.load(config["model_path"])
+        print(f"Loading model: {config['classifier_path']}")
+        state = torch.load(config["classifier_path"])
         classifier.load_state_dict(state["model_state_dict"])
     else:
         classifier = train_loop(config, logger, train_ds, valid_ds, timestamp)
 
     # Test loop
+    all_outputs = []
+    all_targets = []
     classifier.eval()
-    acc = f1 = multilabel_acc = 0
+    multilabel_acc = 0
     with open(f"predictions_{timestamp}.tsv", "a") as file:
         writer = csv.writer(file, delimiter="\t")
         writer.writerow(["protein_id", "prediction", "probability"])
@@ -372,6 +373,8 @@ def train_classifier_from_stored_single_gpu(config, logger):
             targets = batch["labels"].squeeze().to(device)
             embeddings = batch["emb"].to(device)
             outputs = classifier(embeddings)
+            all_targets.append(targets.cpu())
+            all_outputs.append(outputs.cpu())
             if test_ds.get_number_of_labels() > 2:
                 metric = MultilabelAccuracy()
                 metric.update(outputs, torch.where(targets > 0, 1, 0))
@@ -395,22 +398,16 @@ def train_classifier_from_stored_single_gpu(config, logger):
                     )
                     writer.writerows(content)
 
-                acc += accuracy_score(
-                    torch.argmax(targets, dim=1).cpu(),
-                    torch.argmax(outputs, dim=1).cpu(),
-                )
-                f1 += f1_score(
-                    torch.argmax(targets, dim=1).cpu(),
-                    torch.argmax(outputs, dim=1).cpu(),
-                )
+        all_targets = torch.cat(all_targets)
+        all_outputs = torch.cat(all_outputs)
+        test_set_metrics = calc_metrics(all_targets, all_outputs)
+        logger.info(f"\nTest set scores \n{test_set_metrics.to_string(index=False)}") 
 
         if test_ds.get_number_of_labels() > 2:
             multilabel_acc = multilabel_acc / len(test_dataloader)
-            logger.info(f"[TEST SET] Multilabel accuracy: {acc*100:.2f}%")
+            logger.info(f"[TEST SET] Multilabel accuracy: {multilabel_acc*100:.2f}%")
         else:
-            acc = acc / len(test_dataloader)
-            f1 = f1 / len(test_dataloader)
-            logger.info(f"[TEST SET] Accuracy: {acc*100:.2f}% F1: {f1*100:.2f}%")
+            logger.info(f"[TEST SET] Accuracy: {test_set_metrics['Accuracy'][0]*100:.2f}% F1: {test_set_metrics['F1-score'][0]*100:.2f}%")
 
 
 if __name__ == "__main__":
@@ -434,7 +431,7 @@ if __name__ == "__main__":
 
     timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
     logger = init_logger(config, timestamp)
-    logger.info(config) # Prints the whole config file into lof file.
+    logger.info(json.dumps(config, indent = 4))
 
     #TODO :add finetuning before everything
 

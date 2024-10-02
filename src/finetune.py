@@ -16,6 +16,8 @@ from transformers import T5EncoderModel, T5ForConditionalGeneration, T5Tokenizer
 from transformers import AdamW, get_linear_schedule_with_warmup
 
 import esm
+from esm.pretrained import ESM3_sm_open_v0
+from esm.tokenization.sequence_tokenizer import EsmSequenceTokenizer
 
 class T5EncoderWithLinearDecoder(torch.nn.Module):
     def __init__(self, model_name='Rostlab/prot_t5_xl_uniref50'):
@@ -41,10 +43,13 @@ def finetune(config):
 
     user_home = str(Path.home())
     logging.info(user_home)
-    
+    # ESM2 and ESM3 have same library name (esm). Assuming user will pass adequate environment
     if config["model_type"] == 'ESM':
         esm_model_path = config.get("model_name_or_path", "esm2_t33_650M_UR50D")
         model, alphabet = esm.pretrained.load_model_and_alphabet(esm_model_path)
+    elif config["model_type"] == 'ESM3':
+        model = ESM3_sm_open_v0("cuda")
+        alphabet = EsmSequenceTokenizer()
     else:  # PTRANS
         model_path = config['model_name_or_path']
         alphabet = T5Tokenizer.from_pretrained(model_path, do_lower_case=False, local_files_only=True, legacy=False)
@@ -72,14 +77,22 @@ def finetune(config):
         batch_converter = alphabet.get_batch_converter()
         # Convert the data to batch format
         batch_labels, batch_strs, batch_tokens = batch_converter(data)
+    elif config["model_type"] == "ESM3":
+        tokens = alphabet.batch_encode_plus(data, padding=True)[
+            "input_ids"
+        ]  # encode
+        batch_tokens = torch.tensor(tokens, dtype=torch.int64)
     else:  # PTRANS
         # this will replace all rare/ambiguous amino acids by X and introduce white-space between all amino acids
         data = [" ".join(list(re.sub(r"[UZOB]", "X", sequence))) for sequence in data]
         batch_tokens = alphabet.batch_encode_plus(data, add_special_tokens=True, padding=True) #make tokenization for all sequences, addpecial tokens, padding to the longest sequence
         batch_tokens = torch.tensor(list(batch_tokens['input_ids']))
 
-    mask_idx = alphabet.mask_idx  if config["model_type"] == 'ESM' else alphabet.unk_token_id  # torch.tensor(alphabet.mask_idx).to(device)
-    pad_idx = alphabet.padding_idx if config["model_type"] == 'ESM' else alphabet.pad_token_id  # torch.tensor(alphabet.padding_idx).to(device)
+    mask_idx = alphabet.mask_idx  if config["model_type"] == 'ESM' else alphabet.unk_token_id
+    pad_idx = alphabet.padding_idx if config["model_type"] == 'ESM' else alphabet.pad_token_id
+    
+    if config["model_type"] == 'ESM3':
+        mask_idx = alphabet.mask_token_id
 
     # Prepare a dataset and dataloader for batching
     dataset = TensorDataset(batch_tokens)
@@ -117,14 +130,14 @@ def finetune(config):
         for ind, batch in enumerate(tqdm(dataloader)):
             optimizer.zero_grad()
 
-            if config["model_type"] == 'ESM':
+            if (config["model_type"] in ['ESM', 'ESM3']):
                 original_tokens = batch[0]
             else: #PTRANS
                 original_tokens = batch[0]
                 attention_mask = (original_tokens != pad_idx).long().to(device)
 
             # Mask tokens
-            if config["model_type"] == 'ESM': mask_idx = random.randint(4, 30) # All tokens can be seen using alphabet.tok_to_idx
+            if (config["model_type"] in ['ESM', 'ESM3']): mask_idx = random.randint(4, 30) # All tokens can be seen using alphabet.tok_to_idx
 
             masked_tokens = mask_tokens(original_tokens, mask_idx, pad_idx)
             masked_tokens = masked_tokens.to(device)
@@ -135,6 +148,9 @@ def finetune(config):
             if config["model_type"] == 'ESM':
                 output = model(masked_tokens, repr_layers=[33])
                 logits = output["logits"]
+            elif config["model_type"] == 'ESM3':
+                output = model(sequence_tokens=masked_tokens)
+                logits = output.embeddings
             else:  # PTRANS
                 logits = model(input_ids=masked_tokens, attention_mask=attention_mask)
             #  argmax on 33 size vector (size of vocabulary) is performed inside CrossEntropyLoss function
@@ -151,7 +167,7 @@ def finetune(config):
 
         # Save the fine-tuned model
         finetuned_output_name = f"{config['model_type']}_finetuned_epoch_{epoch+1}.pt"
-        if config["model_type"] == 'ESM':
+        if (config["model_type"] in ['ESM', 'ESM3']):
             torch.save(model.state_dict(), finetuned_output_name)
         else:  # PTRANS
             torch.save(model.encoder.state_dict(), finetuned_output_name)
@@ -166,8 +182,8 @@ if __name__ == "__main__":
         help="Determines the path to the config file.",
         type=str,
         required=True,
-    )          
-     
+    )
+
     args = parser.parse_args()
     with open(args.config_path) as file:
             config = json.load(file)

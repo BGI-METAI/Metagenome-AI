@@ -11,6 +11,7 @@
 
 import pathlib
 import pickle
+import os
 
 import torch
 from torch.nn import Identity
@@ -25,15 +26,16 @@ from embeddings.embedding_esm import EsmEmbedding
 
 
 class Esm3Embedding(EsmEmbedding):
-    def __init__(self, pooling="mean"):
-        login(token="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")
+    def __init__(self, config, pooling="mean"):
+        # login(token="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")
         # HfFolder.save_token(access_token)
 
         # This will download the model weights and instantiate the model on your machine.
         # model: ESM3InferenceClient = ESM3.from_pretrained("esm3_sm_open_v1").to("cuda") # or "cpu"
         model = ESM3_sm_open_v0("cuda")
-
         self.model = model
+        if "finetune_model_path" in config and os.path.exists(config['finetune_model_path']):
+            self.model.load_state_dict(torch.load(config['finetune_model_path']))
         self.alphabet = EsmSequenceTokenizer()  # model.get_structure_token_encoder()  #
         # self.model.structure_encoder = Identity()
         self.model.eval()
