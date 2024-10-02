@@ -37,7 +37,7 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.distributed import init_process_group, destroy_process_group
 import torch.distributed as dist
 
-from dataset import CustomDataset, TSVDataset, MaxTokensLoader
+from dataset import TSVDataset, MaxTokensLoader
 from config import get_weights_file_path, ConfigProviderFactory
 from utils.early_stopper import EarlyStopper
 from utils.metrics import calc_metrics
@@ -175,7 +175,7 @@ def _store_embeddings(rank, config, logger, world_size, data_path):
         Path(config["emb_dir"]).mkdir(parents=True, exist_ok=True)
 
         ds = TSVDataset(data_path)
-        max_tokens = config["max_tokens"]
+        max_tokens = config.get("max_tokens", 2000)
         chunk_size = len(ds) // world_size
         remainder = len(ds) % world_size
 
@@ -188,7 +188,7 @@ def _store_embeddings(rank, config, logger, world_size, data_path):
 
         # Each GPU gets its own part of the dataset
         dataloader = MaxTokensLoader(
-            ds, max_tokens, start_ind=indices[rank][0], end_ind=indices[rank][1]
+            ds, start_ind=indices[rank][0], end_ind=indices[rank][1], max_tokens=max_tokens
         )
 
         llm = choose_llm(config)

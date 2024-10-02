@@ -88,11 +88,11 @@ class TSVDataset(Dataset):
 
 
 class MaxTokensLoader:
-    def __init__(self, dataset, max_tokens, start_ind, end_ind, drop_last=False):
+    def __init__(self, dataset, start_ind, end_ind, max_tokens, drop_last=False):
         self.dataset = dataset
-        self.max_tokens = max_tokens
         self.start_ind = start_ind
         self.end_ind = end_ind
+        self.max_tokens = max_tokens
         self.drop_last = drop_last
 
     def __iter__(self):
