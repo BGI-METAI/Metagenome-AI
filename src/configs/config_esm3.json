@@ -1,23 +1,19 @@
 {
 "emb_dir": "results/tox_esm3ft2",
-"program_mode": "RUN_ALL",
+"program_mode": "TRAIN_PREDICT_FROM_STORED",
 
 "train": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/tox_merged/tox_train.tsv",
 "test": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/tox_merged/tox_test.tsv",
 "valid": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/tox_merged/tox_validation.tsv",
 
 "model_type": "ESM3",
-"max_tokens": 2000,
+"max_tokens2": 2000,
 
 "batch_size": 64,
-"num_epochs": 60,
+"num_epochs": 3,
 "lr": 1e-3,
-
-"label": "label",
-"sequence": "original",
-"max_seq_len": null,
 "model_folder": "weights",
-"model_basename": "esm3_model_testT",
+"model_basename": "esm3_model_test",
 "finetune_model_path": "ESM3_finetuned_epoch_19.pt",
 "preload": null,
 "classifier_path": null,

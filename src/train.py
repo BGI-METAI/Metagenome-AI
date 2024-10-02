@@ -19,8 +19,6 @@ import csv
 import socket
 
 import pandas as pd
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import accuracy_score, f1_score
 import torch
 import torch.nn as nn
 from torch.utils import data
@@ -279,7 +277,7 @@ def train_loop(config, logger, train_ds, valid_ds, timestamp):
         all_targets = []
         classifier.eval()
         with torch.no_grad():
-            acc = f1 = multilabel_acc = val_loss = 0
+            multilabel_acc = val_loss = 0
             for batch in valid_dataloader:
                 targets = batch["labels"].squeeze().to(device)
                 embeddings = batch["emb"].to(device)
@@ -293,15 +291,7 @@ def train_loop(config, logger, train_ds, valid_ds, timestamp):
                     metric = MultilabelAccuracy()
                     metric.update(outputs, torch.where(targets > 0, 1, 0))
                     multilabel_acc += metric.compute()
-                else:
-                    acc += accuracy_score(
-                        torch.argmax(targets, dim=1).cpu(),
-                        torch.argmax(outputs, dim=1).cpu(),
-                    )
-                    f1 += f1_score(
-                        torch.argmax(targets, dim=1).cpu(),
-                        torch.argmax(outputs, dim=1).cpu(),
-                    )
+
             all_targets = torch.cat(all_targets)
             all_outputs = torch.cat(all_outputs)
             epoch_metrics = calc_metrics(all_targets, all_outputs)
@@ -314,12 +304,10 @@ def train_loop(config, logger, train_ds, valid_ds, timestamp):
                 multilabel_acc = multilabel_acc / len(valid_dataloader)
                 wandb.log({"validation multilabel accuracy": multilabel_acc})
             else:
-                acc = acc / len(valid_dataloader)
-                f1 = f1 / len(valid_dataloader)
-                wandb.log({"validation accuracy": acc})
-                wandb.log({"validation f1_score": f1})
+                wandb.log({"validation accuracy": epoch_metrics['Accuracy'][0]})
+                wandb.log({"validation f1_score": epoch_metrics['F1-score'][0]})
         logger.warning(
-            f"[VALIDATION SET] Accuracy: {acc:.2f} F1: {f1:.2f} Validation loss: {val_loss:.2f} Training loss: {train_loss:.2f}"
+            f"Validation loss: {val_loss:.2f} Training loss: {train_loss:.2f}"
         )
         if early_stopper.early_stop(val_loss):
             logger.warning(f"Early stopping in epoch {epoch}...")
@@ -375,7 +363,7 @@ def train_classifier_from_stored_single_gpu(config, logger):
     all_outputs = []
     all_targets = []
     classifier.eval()
-    acc = f1 = multilabel_acc = 0
+    multilabel_acc = 0
     with open(f"predictions_{timestamp}.tsv", "a") as file:
         writer = csv.writer(file, delimiter="\t")
         writer.writerow(["protein_id", "prediction", "probability"])
@@ -410,14 +398,6 @@ def train_classifier_from_stored_single_gpu(config, logger):
                     )
                     writer.writerows(content)
 
-                acc += accuracy_score(
-                    torch.argmax(targets, dim=1).cpu(),
-                    torch.argmax(outputs, dim=1).cpu(),
-                )
-                f1 += f1_score(
-                    torch.argmax(targets, dim=1).cpu(),
-                    torch.argmax(outputs, dim=1).cpu(),
-                )
         all_targets = torch.cat(all_targets)
         all_outputs = torch.cat(all_outputs)
         test_set_metrics = calc_metrics(all_targets, all_outputs)
@@ -425,11 +405,9 @@ def train_classifier_from_stored_single_gpu(config, logger):
 
         if test_ds.get_number_of_labels() > 2:
             multilabel_acc = multilabel_acc / len(test_dataloader)
-            logger.info(f"[TEST SET] Multilabel accuracy: {acc*100:.2f}%")
+            logger.info(f"[TEST SET] Multilabel accuracy: {multilabel_acc*100:.2f}%")
         else:
-            acc = acc / len(test_dataloader)
-            f1 = f1 / len(test_dataloader)
-            logger.info(f"[TEST SET] Accuracy: {acc*100:.2f}% F1: {f1*100:.2f}%")
+            logger.info(f"[TEST SET] Accuracy: {test_set_metrics['Accuracy'][0]*100:.2f}% F1: {test_set_metrics['F1-score'][0]*100:.2f}%")
 
 
 if __name__ == "__main__":
