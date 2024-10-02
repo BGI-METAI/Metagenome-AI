@@ -17,7 +17,11 @@ class ConfigProviderFactory:
     @staticmethod
     def get_config_provider(config_file):
         with open(config_file) as file:
-            return json.load(file)
+            config = json.load(file)
+            # set default values
+            if "max_tokens" not in config:
+                config["max_tokens"] = 2000
+            return config
 
 
 def get_weights_file_path(config, epoch: str):
