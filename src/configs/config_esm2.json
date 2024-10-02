@@ -1,6 +1,6 @@
 {
 "emb_dir": "results/esm_amp",
-"program_mode": "TRAIN_PREDICT_FROM_STORED",
+"program_mode": "RUN_ALL",
 "train": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/tox_merged/tox_train.tsv",
 "test": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/tox_merged/tox_test.tsv",
 "valid": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/tox_merged/tox_validation.tsv",
@@ -9,11 +9,8 @@
 "batch_size": 64,
 "num_epochs": 60,
 "lr": 1e-3,
-"label": "label",
-"sequence": "original",
-"max_seq_len": null,
 "model_folder": "weights",
-"model_basename": "esm_model_ama",
+"model_basename": "esm_model",
 "classifier_path": null,
 "experiment_name": "runs/esmSmall",
 "wandb_key": "66bdf7f04d7842bb591556f5263dd9c779ca1ce7" 
