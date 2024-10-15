@@ -12,8 +12,8 @@ from sklearn.metrics import (
 
 
 def calc_metrics(targets, outputs):
-    y_true = torch.argmax(targets, dim=1)
-    y_pred = torch.argmax(outputs, dim=1)
+    y_true = torch.argmax(targets, dim=1) if targets.ndim > 1 else targets
+    y_pred = torch.argmax(outputs, dim=1) if outputs.ndim > 1 else outputs
     # Calculate confusion matrix values: TN, FP, FN, TP
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
     # Calculate other metrics
