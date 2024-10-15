@@ -1,0 +1,19 @@
+{
+    "emb_dir": "/home/share/huadjyin/home/caslavpetronic/projects/Metagenome-AI/emb_dir",
+    "program_mode": "TRAIN_PREDICT_FROM_STORED",
+    "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_train.tsv",
+    "test": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_test.tsv",
+    "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_validation.tsv",
+    "model_type": "ESM", 
+    "classifier_type": "MLP",
+    "max_tokens": 2000,
+    "batch_size": 64,
+    "num_epochs": 80,
+    "lr": 0.08,
+    "model_folder": "/home/share/huadjyin/home/caslavpetronic/projects/Metagenome-AI/esm_results_mlp",
+    "model_basename": "mlp_esm2",
+    "classifier_path": "/home/share/huadjyin/home/caslavpetronic/projects/Metagenome-AI/esm_results_mlp/ESM_mlp_esm2_37.pt",
+    "experiment_name": "runs/esmSmall",
+    "wandb_key": "a0cc1abd1b2f4273851d1c314f6be07342d3f151",
+    "log_dir": "/home/share/huadjyin/home/caslavpetronic/projects/Metagenome-AI/logs"
+}
