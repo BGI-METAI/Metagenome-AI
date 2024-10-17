@@ -2,6 +2,7 @@ import xgboost as xgb
 import torch
 from classifiers.classifier import Classifier
 from torch.utils import data
+from pathlib import Path
 
 
 class XGBoostClassifier(Classifier):
