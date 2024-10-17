@@ -34,7 +34,8 @@ class XGBoostClassifier(Classifier):
             n_estimators=config.get("n_estimators", 80),  # Number of trees
             max_depth=config.get("max_depth", 10),  # Tree depth
             eval_metric=config.get("eval_metric", "mlogloss"),  # Evaluation metric
-            verbosity=config.get("verbosity", 1)  # Verbosity level (training logs)
+            verbosity=config.get("verbosity", 1),  # Verbosity level (training logs)
+			early_stopping_rounds=config.get("early_stop")
         )
 
         self.device = torch.device("cpu")
