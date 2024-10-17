@@ -17,11 +17,9 @@ import os
 from pathlib import Path
 import csv
 
-
 import pandas as pd
 import torch
 from torch.utils import data
-
 
 from torcheval.metrics import MultilabelAccuracy
 import wandb
@@ -50,8 +48,6 @@ def init_logger(config, timestamp):
         filename=f"{config['model_type']}_{config['program_mode']}_{timestamp}.log",
     )
     return logging.getLogger(__name__)
-
-
 
 
 # Initialize the PyTorch distributed backend
