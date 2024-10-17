@@ -1,8 +1,6 @@
 import xgboost as xgb
 import torch
 from classifiers.classifier import Classifier
-from config import get_weights_file_path
-from pathlib import Path
 from torch.utils import data
 
 
@@ -153,6 +151,6 @@ class XGBoostClassifier(Classifier):
             logger: Logger object to log the save event.
             timestamp (str): Timestamp to create unique file name.
         """
-        model_filename = get_weights_file_path(config, f"xgboost_{timestamp}")
+        model_filename = self.get_a_model_folder_path(config, f"xgboost_{timestamp}")
         self.model.save_model(model_filename)
         logger.warning(f"XGBoost model saved at: {model_filename}")

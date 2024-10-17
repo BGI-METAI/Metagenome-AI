@@ -2,8 +2,6 @@ from torch import nn
 from torch.optim.lr_scheduler import StepLR
 
 from classifiers.classifier import Classifier
-from config import get_weights_file_path
-from pathlib import Path
 from torch.utils import data
 from utils.wandb import init_wandb
 import torch
@@ -161,7 +159,7 @@ class MLPClassifier(Classifier):
                 logger.warning(f"Early stopping in epoch {epoch}...")
                 break
             # Save model at the end of every epoch
-            model_filename = get_weights_file_path(config, f"{epoch:02d}")
+            model_filename = self.get_a_model_folder_path(config, f"{epoch:02d}")
             torch.save(
                 {
                     "epoch": epoch,
@@ -179,6 +177,7 @@ class MLPClassifier(Classifier):
         logger.info(f"\nValidation set scores per epoch \n {all_metrics_df.to_string(index=False)}")
         wandb.unwatch()
         run.finish()
+
 
     def load_stored(self, classifier_path):
         """Loads the model weights from a saved checkpoint.

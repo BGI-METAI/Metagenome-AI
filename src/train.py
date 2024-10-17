@@ -33,7 +33,7 @@ from torch.distributed import init_process_group, destroy_process_group
 import torch.distributed as dist
 
 from dataset import TSVDataset, MaxTokensLoader
-from config import get_weights_file_path, ConfigProviderFactory, choose_classifier, choose_llm
+from config import ConfigProviderFactory, choose_classifier, choose_llm
 from utils.early_stopper import EarlyStopper
 from utils.metrics import calc_metrics
 
