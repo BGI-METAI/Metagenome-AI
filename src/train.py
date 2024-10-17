@@ -33,12 +33,9 @@ from torch.distributed import init_process_group, destroy_process_group
 import torch.distributed as dist
 
 from dataset import TSVDataset, MaxTokensLoader
-from config import get_weights_file_path, ConfigProviderFactory
+from config import get_weights_file_path, ConfigProviderFactory, choose_classifier, choose_llm
 from utils.early_stopper import EarlyStopper
 from utils.metrics import calc_metrics
-import embeddings
-
-import classifiers
 
 
 def init_logger(config, timestamp):
@@ -65,49 +62,6 @@ def ddp_setup(rank, world_size):
     os.environ["MASTER_PORT"] = "12356"
     init_process_group(backend="nccl", rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
-
-
-def choose_llm(config):
-    """Select a pretrained model that produces embeddings
-
-    Args:
-        config (_type_): _description_
-
-    Raises:
-        NotImplementedError: _description_
-
-    Returns:
-        Embedding: A subclass of class Embedding
-    """
-    if config["model_type"] == "ESM":
-        return embeddings.EsmEmbedding(config)
-    elif config["model_type"] == "ESM3":
-        return embeddings.Esm3Embedding(config)
-    elif config["model_type"] == "PTRANS":
-        return embeddings.ProteinTransEmbedding(config)
-    elif config["model_type"] == "PVEC":
-        return embeddings.ProteinVecEmbedding()
-    raise NotImplementedError("This type of embedding is not supported")
-
-
-def choose_classifier(config, input_dimensions, output_dimensions):
-    """Select a classifier model to train on embedings
-
-    Args:
-        config (_type_): _description_
-
-    Raises:
-        NotImplementedError: _description_
-
-    Returns:
-        Embedding: A subclass of class Embedding
-    """
-    if config["classifier_type"] == "MLP":
-        return classifiers.MLPClassifier(input_dim=input_dimensions, output_dim=output_dimensions, config=config)
-    elif config["classifier_type"] == "XGBoost":
-        return classifiers.XGBoostClassifier(input_dim=input_dimensions, output_dim=output_dimensions, config=config)
-
-    raise NotImplementedError("This type of classifier is not supported")
 
 
 def store_embeddings(config, logger):
