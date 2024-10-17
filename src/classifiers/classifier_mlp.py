@@ -24,9 +24,9 @@ class MLPModel(nn.Module):
 
     def __init__(self, d_model, num_classes, hidden_sizes=None):
         super().__init__()
+        self.dropout = nn.Dropout(0.1)
         if hidden_sizes is None:
             # Single fully connected layer for classification head
-            self.dropout = nn.Dropout(0.1)
             self.classifier = nn.Sequential(nn.Linear(d_model, num_classes))
         # Multiple hidden layers followed by a linear layer for classification head
         else:
