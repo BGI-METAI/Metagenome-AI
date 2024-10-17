@@ -23,14 +23,6 @@ class ConfigProviderFactory:
             return config
 
 
-def get_weights_file_path(config, epoch: str):
-    model_folder = config["model_folder"]
-    model_basename = config["model_basename"]
-    model_type = config["model_type"]
-    model_filename = f"{model_type}_{model_basename}_{epoch}.pt"
-    return str(Path(".") / model_folder / model_filename)
-
-
 def choose_llm(config):
     """Select a pretrained model that produces embeddings
 
