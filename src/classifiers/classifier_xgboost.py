@@ -50,7 +50,7 @@ class XGBoostClassifier(Classifier):
         Returns:
             Predicted labels as a NumPy array.
         """
-        return torch.tensor(self.model.predict(test_data.cpu()))
+        return torch.tensor(self.model.predict_proba(test_data.cpu()))
 
     def train(self, config, logger, train_ds, valid_ds, timestamp):
         """

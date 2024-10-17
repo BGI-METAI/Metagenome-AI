@@ -5,7 +5,7 @@ from classifiers.classifier import Classifier
 from config import get_weights_file_path
 from pathlib import Path
 from torch.utils import data
-from train import choose_llm, init_wandb
+from utils.wandb import init_wandb
 import torch
 import pandas as pd
 from torcheval.metrics import MultilabelAccuracy
@@ -86,10 +86,6 @@ class MLPClassifier(Classifier):
             batch_size=config["batch_size"],
             drop_last=True,
         )
-
-        # Or replace this part to be a part of the config as well
-        llm = choose_llm(config)
-        d_model = llm.get_embedding_dim()
 
         run = init_wandb(config["model_folder"], timestamp, self.model)
         optimizer = torch.optim.Adam(self.model.parameters(), lr=config["lr"], eps=1e-9)
