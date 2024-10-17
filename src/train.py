@@ -16,13 +16,12 @@ import warnings
 import os
 from pathlib import Path
 import csv
-import socket
+
 
 import pandas as pd
 import torch
-import torch.nn as nn
 from torch.utils import data
-from torch.optim.lr_scheduler import StepLR, LinearLR
+
 
 from torcheval.metrics import MultilabelAccuracy
 import wandb
@@ -53,24 +52,6 @@ def init_logger(config, timestamp):
     return logging.getLogger(__name__)
 
 
-def init_wandb(model_folder, timestamp, model=None):
-    # initialize wandb tracker
-    wandb_output_dir = os.path.join(model_folder, "wandb_home")
-    Path(wandb_output_dir).mkdir(parents=True, exist_ok=True)
-    wandb.require("core")
-    run = wandb.init(
-        project="protein function annotation",
-        notes=socket.gethostname(),
-        name=f"prot_func_anno_{timestamp}",
-        group="linear_classifier",
-        dir=wandb_output_dir,
-        job_type="training",
-        reinit=True,
-    )
-    if model:
-        wandb.watch(model, log="all")
-
-    return run
 
 
 # Initialize the PyTorch distributed backend
@@ -235,11 +216,11 @@ def train_classifier_from_stored_single_gpu(config, logger):
     all_outputs = []  # List to collect model outputs
     all_targets = []  # List to collect targets/labels
     multilabel_acc = 0
-    #
-    # with open(f"predictions_{timestamp}.tsv", "a") as file:
-    #     writer = csv.writer(file, delimiter="\t")
-    #     writer.writerow(["protein_id", "prediction", "probability"])
-    #
+
+    with open(f"predictions_{timestamp}.tsv", "a") as file:
+        writer = csv.writer(file, delimiter="\t")
+        writer.writerow(["protein_id", "prediction", "probability"])
+
     for batch in test_dataloader:
         targets = batch["labels"].squeeze().cpu()  # Move labels to CPU
         embeddings = batch["emb"].cpu()  # Move embeddings to CPU
@@ -248,7 +229,7 @@ def train_classifier_from_stored_single_gpu(config, logger):
         # Append the current batch targets and outputs to the lists
         all_targets.append(targets)  # Append to Python list
         all_outputs.append(outputs)  # Append to Python list
-        """
+
         if test_ds.get_number_of_labels() > 2:
             metric = MultilabelAccuracy()
             metric.update(outputs, torch.where(targets > 0, 1, 0))
@@ -271,21 +252,20 @@ def train_classifier_from_stored_single_gpu(config, logger):
                     )
                 )
                 writer.writerows(content)
-            """
+
     # Concatenate all the targets and outputs at the end, after the loop
     all_targets = torch.cat(all_targets)
     all_outputs = torch.cat(all_outputs)
 
-    # Calculate metrics on the test set
-    test_set_metrics = calc_metrics(all_targets, all_outputs)
-    logger.info(f"\nTest set scores \n{test_set_metrics.to_string(index=False)}")
-
-    # if test_ds.get_number_of_labels() > 2:
-    #     multilabel_acc = multilabel_acc / len(test_dataloader)
-    #     logger.info(f"[TEST SET] Multilabel accuracy: {multilabel_acc * 100:.2f}%")
-    # else:
-    #     logger.info(
-    #         f"[TEST SET] Accuracy: {test_set_metrics['Accuracy'][0] * 100:.2f}% F1: {test_set_metrics['F1-score'][0] * 100:.2f}%")
+    if test_ds.get_number_of_labels() > 2:
+        multilabel_acc = multilabel_acc / len(test_dataloader)
+        logger.info(f"[TEST SET] Multilabel accuracy: {multilabel_acc * 100:.2f}%")
+    else:
+        # Calculate metrics on the test set
+        test_set_metrics = calc_metrics(all_targets, all_outputs)
+        logger.info(f"\nTest set scores \n{test_set_metrics.to_string(index=False)}")
+        logger.info(
+            f"[TEST SET] Accuracy: {test_set_metrics['Accuracy'][0] * 100:.2f}% F1: {test_set_metrics['F1-score'][0] * 100:.2f}%")
 
 
 if __name__ == "__main__":
