@@ -59,8 +59,8 @@ class XGBoostClassifier(Classifier):
         Args:
             config (dict): Training configuration dictionary.
             logger: Logger object for logging messages.
-            train_ds: Training dataset.
-            valid_ds: Validation dataset.
+            train_ds (TSVDataset): Training dataset.
+            valid_ds (TSVDataset): Validation dataset.
             timestamp (str): Timestamp or unique identifier for the training session.
         """
         # Ensure model saving folder exists

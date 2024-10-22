@@ -53,7 +53,8 @@ class MLPClassifier(Classifier):
         output_dim (int): Number of classes (output labels).
         config (dict): Configuration dictionary containing training settings and hyperparameters.
     """
-    def __init__(self, input_dim, output_dim, config:dict):
+
+    def __init__(self, input_dim, output_dim, config: dict):
         super().__init__(input_dim, output_dim)
         self.hidden_dims = config.get("hidden_layers", None)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -65,15 +66,15 @@ class MLPClassifier(Classifier):
         Args:
             config (dict): Configuration dictionary containing training settings.
             logger (logging.Logger): Logger object for logging training details.
-            train_ds (Dataset): Training dataset.
-            valid_ds (Dataset): Validation dataset.
+            train_ds (TSVDataset): Training dataset.
+            valid_ds (TSVDataset): Validation dataset.
             timestamp (str): Timestamp for organizing model saving.
         """
         Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
 
         train_dataloader = data.DataLoader(
             train_ds,
-            batch_size=config["batch_size"],
+            batch_size=config.get("batch_size", 64),
             shuffle=True,
             num_workers=3,
             pin_memory=True,
@@ -81,21 +82,21 @@ class MLPClassifier(Classifier):
         )
         valid_dataloader = data.DataLoader(
             valid_ds,
-            batch_size=config["batch_size"],
+            batch_size=config.get("batch_size", 64),
             drop_last=True,
         )
 
         run = init_wandb(config["model_folder"], timestamp, self.model)
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=config["lr"], eps=1e-9)
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=config.get("lr", 0.001), eps=1e-9)
         scheduler = StepLR(optimizer, step_size=3, gamma=0.5)
-        early_stopper = EarlyStopper(patience=4)
+        early_stopper = EarlyStopper(patience=config.get("patience", 4))
         # A 2-class problem can be modeled as:
         # - 2-neuron output with only one correct class: softmax + categorical_crossentropy
         # - 1-neuron output, one class is 0, the other is 1: sigmoid + binary_crossentropy
         loss_function = nn.CrossEntropyLoss()
         all_metrics_df = pd.DataFrame()
 
-        for epoch in range(config["num_epochs"]):
+        for epoch in range(config.get("num_epochs", 60)):
             self.model.train()
             train_loss = 0
             for batch in train_dataloader:
@@ -177,7 +178,6 @@ class MLPClassifier(Classifier):
         logger.info(f"\nValidation set scores per epoch \n {all_metrics_df.to_string(index=False)}")
         wandb.unwatch()
         run.finish()
-
 
     def load_stored(self, classifier_path):
         """Loads the model weights from a saved checkpoint.
