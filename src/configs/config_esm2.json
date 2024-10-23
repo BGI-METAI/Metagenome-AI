@@ -1,17 +1,25 @@
 {
-"emb_dir": "results/esm_amp",
-"program_mode": "RUN_ALL",
-"train": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/tox_merged/tox_train.tsv",
-"test": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/tox_merged/tox_test.tsv",
-"valid": "/home/share/huadjyin/home/nikolamilicevic/META_AI/datasets/tox_merged/tox_validation.tsv",
-"model_type": "ESM", 
-"max_tokens": 2000,
-"batch_size": 64,
-"num_epochs": 60,
-"lr": 1e-3,
-"model_folder": "weights",
-"model_basename": "esm_model",
-"classifier_path": null,
-"experiment_name": "runs/esmSmall",
-"wandb_key": "66bdf7f04d7842bb591556f5263dd9c779ca1ce7" 
+  "emb_dir": "./emb_dir/esm2_mlp_tox/",
+  "program_mode": "RUN_ALL",
+
+  "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_train.tsv",
+  "test": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_test.tsv",
+  "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_validation.tsv",
+
+  "model_type": "ESM",
+  "max_tokens": 2000,
+
+  "classifier_type": "MLP",
+  "batch_size": 64,
+  "num_epochs": 60,
+  "lr": 1e-3,
+  "hidden_layers": null,
+  "early_stop_patience": 4,
+
+  "model_folder": "./classifier_results/esm_results",
+  "model_basename": "esm2_mlp_tox_merged_model",
+  "classifier_path": null,
+  "experiment_name": "runs/esmSmall",
+
+  "wandb_key": "66bdf7f04d7842bb591556f5263dd9c779ca1ce7"
 }
