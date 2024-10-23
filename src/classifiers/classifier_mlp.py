@@ -1,6 +1,6 @@
 from torch import nn
 from torch.optim.lr_scheduler import StepLR
-
+from pathlib import Path
 from classifiers.classifier import Classifier
 from torch.utils import data
 from utils.wandb import init_wandb
@@ -89,7 +89,7 @@ class MLPClassifier(Classifier):
         run = init_wandb(config["model_folder"], timestamp, self.model)
         optimizer = torch.optim.Adam(self.model.parameters(), lr=config.get("lr", 0.001), eps=1e-9)
         scheduler = StepLR(optimizer, step_size=3, gamma=0.5)
-        early_stopper = EarlyStopper(patience=config.get("patience", 4))
+        early_stopper = EarlyStopper(patience=config.get("early_stop_patience", 4))
         # A 2-class problem can be modeled as:
         # - 2-neuron output with only one correct class: softmax + categorical_crossentropy
         # - 1-neuron output, one class is 0, the other is 1: sigmoid + binary_crossentropy
