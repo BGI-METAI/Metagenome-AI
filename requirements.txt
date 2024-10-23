@@ -8,6 +8,7 @@ pandas
 matplotlib
 wandb
 transformers
+xgboost
 h5py
 faiss-gpu
 fair-esm
