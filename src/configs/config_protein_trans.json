@@ -9,8 +9,6 @@
     "emb_dir": "./datasets/AMP/all_embeddings_ptrans",
 
     "model_type": "PTRANS",
-    "model_name_or_path": "Rostlab/prot_t5_xl_uniref50",
-    "finetune_model_path": "/home/share/huadjyin/home/vladimir/Metagenome-AI/ptrans_encoder_ft_6.pt",
     "max_tokens": 2500,
 
     "classifier_type": "MLP",
@@ -19,7 +17,7 @@
     "lr": 1e-3,
 
     "label": "label",
-    "model_folder": "ptrans_results",
+    "model_folder": "./classifier_results/ptrans_results",
     "model_basename": "ptrans_amp",
     "preload": null,
     "experiment_name": "runs/ptrans_amp_new",

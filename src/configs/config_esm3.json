@@ -1,6 +1,6 @@
 {
   "emb_dir": "./emb_dir/tox_esm3ft2",
-  "program_mode": "TRAIN_PREDICT_FROM_STORED",
+  "program_mode": "RUN_ALL",
 
   "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_train.tsv",
   "test": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_test.tsv",
@@ -15,9 +15,8 @@
   "lr": 1e-3,
   "hidden_layers": null,
 
-  "model_folder": "classifier_results/weights",
-  "model_basename": "esm3_model_test",
-  "finetune_model_path": "ESM3_finetuned_epoch_19.pt",
+  "model_folder": "./classifier_results/esm3_results",
+  "model_basename": "esm3_mlp_tox_merged_model",
   "preload": null,
   "classifier_path": null,
 
