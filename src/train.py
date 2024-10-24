@@ -34,17 +34,47 @@ import torch.distributed as dist
 
 from dataset import TSVDataset, MaxTokensLoader
 from config import ConfigProviderFactory, choose_classifier, choose_llm
-from utils.early_stopper import EarlyStopper
 from utils.metrics import calc_metrics
 
 
 def init_logger(config, timestamp):
+    """
+    Creates a logger object that store logs in the log_dir
+    Args:
+        config (dict): Configuration file containing log_dir
+        timestamp (string): Timestamp of the current run
+    """
+    # Check if 'log_dir' exists in config; if not, default to the current directory
+    log_dir = config.get('log_dir', './logs/')
+    # Ensure the directory exists, create it if not
+    os.makedirs(log_dir, exist_ok=True)
+    # Build the log file path
+    log_file = os.path.join(log_dir, f"{config['model_type']}_{config['program_mode']}_{timestamp}.log")
+    # Set up the logger
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(message)s",
         level=logging.INFO,
-        filename=f"{config['model_type']}_{config['program_mode']}_{timestamp}.log",
+        filename=log_file
     )
+
     return logging.getLogger(__name__)
+
+
+def init_predictions_path(config, timestamp):
+    """
+    Creates a folder to store predictions and returns the path to the file
+    Args:
+        config (dict): Configuration file containing pred_dir
+        timestamp (string): Timestamp of the current run
+    """
+    # Check if 'log_dir' exists in config; if not, default to the current directory
+    pred_dir = config.get('pred_dir', './predictions/')
+    # Ensure the directory exists, create it if not
+    os.makedirs(pred_dir, exist_ok=True)
+    # Build the tsv file path
+    pred_file_path = os.path.join(pred_dir, f"predictions_{config['model_type']}_{config['classifier_type']}_{timestamp}.tsv")
+
+    return pred_file_path
 
 
 # Initialize the PyTorch distributed backend
@@ -167,7 +197,9 @@ def train_classifier_from_stored_single_gpu(config, logger):
     all_targets = []  # List to collect targets/labels
     multilabel_acc = 0
 
-    with open(f"predictions_{timestamp}.tsv", "a") as file:
+    predictions_path = init_predictions_path(config, timestamp)
+
+    with open(predictions_path, "a") as file:
         writer = csv.writer(file, delimiter="\t")
         writer.writerow(["protein_id", "prediction", "probability"])
 
@@ -192,7 +224,7 @@ def train_classifier_from_stored_single_gpu(config, logger):
             values_rounded = [
                 round(p, 4) for p in prediction_proba.values.cpu().numpy()
             ]
-            with open(f"predictions_{timestamp}.tsv", "a") as file:
+            with open(predictions_path, "a") as file:
                 writer = csv.writer(file, delimiter="\t")
                 content = list(
                     zip(
