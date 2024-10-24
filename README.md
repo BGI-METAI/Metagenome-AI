@@ -6,23 +6,34 @@ The framework for labeling and classification of protein sequences based on Larg
 
 ## Configuration Parameters
 
-| Parameter Name      | Description                                                                                               | Required | Default Value         |
-|---------------------|-----------------------------------------------------------------------------------------------------------|----------|-----------------------|
-| `model_type`        | Type of embedding model to be used. Options: `"ESM"`, `"ESM3"`, `"PTRANS"`, `"PVEC"`.                     | Yes      | `None`               |
-| `program_mode`      | Specifies the mode in which the program will run. Possible modes: ONLY_STORE_EMBEDDINGS (just store embeddings), TRAIN_PREDICT_FROM_STORED (just train classifier from stored embeddings), or RUN_ALL (store embeddings and train classifier). Default is RUN_ALL   | Yes      | `"RUN_ALL"`           |
-| `train`             | Path to the training dataset.                                                                             | Yes       | `None`                |
-| `valid`             | Path to the validation dataset. If validation dataset does not exist it can be same as test.              | Yes       | `None`                |
-| `test`              | Path to the test dataset.                                                                                 | Yes       | `None`                |
-| `emb_dir`           | Directory where embeddings will be stored.                                                                | Yes      | `None`                |
-| `model_folder`      | Folder to save the model checkpoints.                                                                     | Yes      | `None`                |
-| `wandb_key`         | API key for Weights and Biases tracking.                                                                  | Yes      | `None`                |
-| `batch_size`        | The batch size to use during training of the classifier.                                                  | No       | `32`                  |
-| `num_epochs`        | Number of epochs for training.                                                                            | No       | `10`                  |
-| `lr`                | Learning rate for the optimizer of the classifier.                                                        | No       | `0.001`               |
-| `early_stop_patience`| Number of epochs with no improvement after which training will be stopped.                               | No       | `4`                   |
-| `max_tokens`        | Maximum number of tokens per dataset split for the embedding process.                                     | No       | `2500`                |
-| `classifier_path`   | Path to a pre-trained model checkpoint to load instead of training classifier.                            | No       | `None`                |
-| `log_dir`           | Directory where log files will be saved.                                                                  | No       | `./logs/`             |
+| Parameter Name        | Description                                                                                                                                                                                                | Required | Default Value    |
+|-----------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|------------------|
+| `model_type`          | Type of embedding model to be used. Options: `"ESM"`, `"ESM3"`, `"PTRANS"`, `"PVEC"`.                                                                                                                      | Yes      | `None`           |
+| `classifier_type`     | Type of classification head to be used. Options: `"MLP"`, `"XGBoost"`.                                                                                                                                     | Yes      | `None`           |
+| `program_mode`        | Mode in which the program will run. Options: `"ONLY_STORE_EMBEDDINGS"` (only store embeddings), `"TRAIN_PREDICT_FROM_STORED"` (train classifier from stored embeddings), or `"RUN_ALL"` (store and train). | Yes      | `"RUN_ALL"`      |
+| `train`               | Path to the training dataset.                                                                                                                                                                              | Yes      | `None`           |
+| `valid`               | Path to the validation dataset. If not available, the test dataset path can be reused.                                                                                                                     | Yes      | `None`           |
+| `test`                | Path to the test dataset.                                                                                                                                                                                  | Yes      | `None`           |
+| `emb_dir`             | Directory to store embeddings.                                                                                                                                                                             | Yes      | `None`           |
+| `model_folder`        | Directory to save model checkpoints.                                                                                                                                                                       | Yes      | `None`           |
+| `model_basename`      | Name under which to save model checkpoints.                                                                                                                                                                | Yes      | `None`           |
+| `wandb_key`           | API key for Weights and Biases tracking.                                                                                                                                                                   | Yes      | `None`           |
+| `batch_size`          | Batch size for classifier training.                                                                                                                                                                        | No       | `32`             |
+| `num_epochs`          | Number of epochs for MLP classifier training.                                                                                                                                                              | No       | `10`             |
+| `lr`                  | Learning rate for the MLP classifier optimizer.                                                                                                                                                            | No       | `0.001`          |
+| `hidden_layers`       | List specifying hidden layer sizes for the MLP classifier. Example: `[1024, 512]`.                                                                                                                         | No       | `None`           |
+| `early_stop_patience` | Number of epochs without improvement after which MLP training stops.                                                                                                                                       | No       | `4`              |
+| `objective`           | Objective function for XGBoost classifier training.                                                                                                                                                        | No       | `multi:softmax`  |
+| `n_estimators`        | Number of trees for XGBoost classifier training.                                                                                                                                                           | No       | `10`             |
+| `eta`                 | Learning rate for XGBoost classifier.                                                                                                                                                                      | No       | `0.001`          |
+| `early_stop`          | Number of rounds without improvement after which XGBoost training stops.                                                                                                                                   | No       | `4`              |
+| `max_depth`           | Maximum tree depth for XGBoost classifier.                                                                                                                                                                 | No       | `8`              |
+| `eval_metric`         | Evaluation metric for XGBoost classifier training.                                                                                                                                                         | No       | `mlogloss`       |
+| `verbosity`           | Verbosity level for XGBoost classifier training. Higher values produce more detailed output.                                                                                                               | No       | `1`              |
+| `max_tokens`          | Maximum number of tokens per dataset split for embedding generation.                                                                                                                                       | No       | `2500`           |
+| `classifier_path`     | Path to a pre-trained classifier checkpoint. If provided, training will be skipped.                                                                                                                        | No       | `None`           |
+| `log_dir`             | Directory for saving log files.                                                                                                                                                                            | No       | `./logs/`        |
+| `pred_dir`            | Directory for saving predictions of the final model.                                                                                                                                                       | No       | `./predictions/` |
 
 ### Notes:
 - Required parameters **must** be present in the config file for the program to run.
@@ -46,4 +57,4 @@ MIT
 
 ## Contact
 
-For all suggestions please create the Github issue or contact vladimirkovacevic@genomics.cn.
+For all suggestions please create the GitHub issue or contact vladimirkovacevic@genomics.cn.

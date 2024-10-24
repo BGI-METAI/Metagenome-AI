@@ -6,19 +6,18 @@
     "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_08_09_train.tsv",
     "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_08_09_validation.tsv",
     "test": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_08_09_test.tsv",
-    "emb_dir": "/home/share/huadjyin/home/vladimir/META_AI/datasets/AMP/all_embeddings_ptrans",
+    "emb_dir": "./datasets/AMP/all_embeddings_ptrans",
 
-    "emb_type": "PTRANS",
-    "model_name_or_path": "Rostlab/prot_t5_xl_uniref50",
-    "finetune_model_path": "/home/share/huadjyin/home/vladimir/Metagenome-AI/ptrans_encoder_ft_6.pt",
+    "model_type": "PTRANS",
     "max_tokens": 2500,
 
+    "classifier_type": "MLP",
     "batch_size": 200,
     "num_epochs": 30,
     "lr": 1e-3,
 
     "label": "label",
-    "model_folder": "ptrans_results",
+    "model_folder": "./classifier_results/ptrans_results",
     "model_basename": "ptrans_amp",
     "preload": null,
     "experiment_name": "runs/ptrans_amp_new",

@@ -31,11 +31,11 @@ class XGBoostClassifier(Classifier):
             objective=config.get("objective", "multi:softmax"),  # Default: multi-class classification
             num_class=output_dim,  # Output dimension (number of classes)
             eta=config.get("eta", 0.08),  # Learning rate
-            n_estimators=config.get("n_estimators", 80),  # Number of trees
+            n_estimators=config.get("n_estimators", 100),  # Number of trees
             max_depth=config.get("max_depth", 10),  # Tree depth
             eval_metric=config.get("eval_metric", "mlogloss"),  # Evaluation metric
             verbosity=config.get("verbosity", 1),  # Verbosity level (training logs)
-			early_stopping_rounds=config.get("early_stop")
+            early_stopping_rounds=config.get("early_stop")
         )
 
         self.device = torch.device("cpu")
@@ -59,8 +59,8 @@ class XGBoostClassifier(Classifier):
         Args:
             config (dict): Training configuration dictionary.
             logger: Logger object for logging messages.
-            train_ds: Training dataset.
-            valid_ds: Validation dataset.
+            train_ds (TSVDataset): Training dataset.
+            valid_ds (TSVDataset): Validation dataset.
             timestamp (str): Timestamp or unique identifier for the training session.
         """
         # Ensure model saving folder exists
