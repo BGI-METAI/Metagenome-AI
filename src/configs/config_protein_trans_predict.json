@@ -13,12 +13,13 @@
     "prot_trans_model_name": "prot_t5_xl_uniref50",
     "max_tokens": 2500,
 
+    "classifier_type": "MLP",
     "batch_size": 200,
     "num_epochs": 20,
     "lr": 1e-3,
 
     "label": "label",
-    "model_folder": "ptrans_results",
+    "model_folder": "./classifier_results/ptrans_results",
     "model_basename": "ptrans_amp",
     "preload": "/home/share/huadjyin/home/vladimir/Metagenome-AI/ptrans_results/PTRANS_ptrans_amp29.pt",
     "experiment_name": "runs/ptrans_amp_new",

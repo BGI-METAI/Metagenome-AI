@@ -1,5 +1,7 @@
 import os
-from config import ConfigsGenerator
+from config import ConfigsGenerator, ConfigProviderFactory
+import argparse
+import warnings
 
 
 class ShellGenerator:
@@ -65,6 +67,8 @@ python src/train.py -c {config_file}
         with open(sh_file_path, 'w') as file:
             file.write(sh_content)
 
+        os.chmod(sh_file_path, 0o755)
+
     def generate(self):
         """
         Iterates through all configs and generates .sh files for each based on run mode and model specifics.
@@ -82,51 +86,22 @@ python src/train.py -c {config_file}
 
 
 if __name__ == "__main__":
-    config = {
-        "models": [
-            {
-                "model_type": "ESM",
-                "max_tokens": 2000,
-                "batch_size": 64,
-                "env": "conda/esm"
-            }
-        ],
-        "datasets": [
-            {
-                "dataset_name": "toxisity",
-                "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_train.tsv",
-                "test": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_test.tsv",
-                "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_validation.tsv"
-            },
-            {
-                "dataset_name": "G+",
-                "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_train.tsv",
-                "test": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_test.tsv",
-                "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_validation.tsv"
-            }
-        ],
-        "classifiers": [
-            {
-                "classifier_type": "MLP",
-                "batch_size": 64,
-                "num_epochs": 60,
-                "lr": 1e-3,
-                "hidden_layers": None,
-                "early_stop_patience": 4,
-            }
-        ],
-        "run_name": "test1",
-        "work_dir": "caslav/test"
+    parser = argparse.ArgumentParser(
+        description="Files preparation for multiple models testing."
+    )
 
-    }
+    parser.add_argument("-c", "--config_path", type=str)
 
-    print("Creating Generator")
+    args = parser.parse_args()
+    warnings.filterwarnings("ignore")
+    config = ConfigProviderFactory.get_config_provider(args.config_path)
+
     confGen = ConfigsGenerator(config)
-    print("Started generating")
+    print("Started generating config files...")
     confGen.generate()
-    print("Finished generating")
+    print("...Finished generating config files!")
 
-    print("Generating sh files")
+    print("Started generating shell files...")
     shGen = ShellGenerator(config, confGen)
     shGen.generate()
-    print("Files Generated")
+    print("...Finished generating shell files!")
