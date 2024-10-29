@@ -70,6 +70,9 @@ def choose_classifier(config, input_dimensions, output_dimensions):
 
 
 class ConfigsGenerator:
+    DIRECTORIES = ["embeddings", "classifiers", "predictions", "logs", "configs"]
+    RUN_MODES = ["create_embeddings", "train_classifiers"]
+
     def __init__(self, config):
         """
         Initializes ConfigsGenerator with configuration settings and prepares directory structure.
@@ -79,11 +82,16 @@ class ConfigsGenerator:
         """
         self.run_name = config.get('run_name', 'default')
         self.run_directory = f"./runs/{self.run_name}"
-        self.directories = ["embeddings", "classifiers", "predictions", "logs", "configs"]
+
         # Extract configuration lists for models, datasets, and classifiers
         self.models = config.get("models", [])
         self.datasets = config.get("datasets", [])
         self.class_heads = config.get("classifiers", [])
+        # Config Files
+        self.configs = []
+
+    def get_configs(self):
+        return self.configs
 
     def get_directory_path(self, directory):
         """
@@ -135,22 +143,23 @@ class ConfigsGenerator:
     def create_starting_directories(self):
         """Creates the main directory and required subdirectories for the run."""
         os.makedirs(self.run_directory, exist_ok=True)
-        for folder in self.directories:
+        for folder in self.DIRECTORIES:
             os.makedirs(os.path.join(self.run_directory, folder), exist_ok=True)
 
-    def write_config_file(self, config, model, directory, classifier=None):
+    def write_config_file(self, config, model, dataset, classifier=None):
         """
         Writes a configuration dictionary to a JSON file based on the mode (embedding or classifier).
 
         Args:
             config (dict): Configuration dictionary to write to file.
             model (dict): Model parameters, used for naming the file.
-            directory (str): Directory path for storing the config file.
+            dataset (dict): Dataset params.
             classifier (dict, optional): Classifier parameters, if creating a classifier config.
         """
         # Determine mode and filename based on whether a classifier is provided
         config_mode = "create_embeddings" if classifier is None else "train_classifiers"
-        config_file_name = f"{self.get_model_base_name(model, directory, classifier)}.json"
+        model_base_name = self.get_model_base_name(model, dataset, classifier)
+        config_file_name = f"{model_base_name}.json"
 
         # Create the path for the config file and ensure the directory exists
         config_directory = os.path.join(self.get_directory_path("configs"), config_mode)
@@ -160,6 +169,13 @@ class ConfigsGenerator:
         # Write the config dictionary to the JSON file
         with open(config_file_path, 'w') as config_file:
             json.dump(config, config_file, indent=4)
+
+        self.configs.append({
+            "run_mode": config_mode,
+            "config_path": config_file_path,
+            "model_base_name": model_base_name,
+            "env": model.get("env")
+        })
 
     def create_config_file(self, model, dataset, classifier=None):
         """
@@ -187,9 +203,9 @@ class ConfigsGenerator:
             config["model_basename"] = self.get_model_base_name(model, dataset, classifier)
 
         # Write the finalized configuration file
-        self.write_config_file(config, model, dataset)
+        self.write_config_file(config, model, dataset, classifier)
 
-    def generate_configs(self):
+    def generate(self):
         """
         Generates the config files for each model, dataset, and classifier combination.
 
