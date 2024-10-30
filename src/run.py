@@ -6,7 +6,6 @@ import glob
 from shell_generator import *
 
 
-
 def submit_jobs(job_dir):
     """
     Submits all jobs in the specified directory with dsub -s and waits for them to finish.
