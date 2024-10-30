@@ -195,7 +195,7 @@ class ConfigsGenerator:
             config.update(classifier)
 
         # Set run mode and directories for embeddings or classifier training
-        config["program_mode"] = "TRAIN_FROM_STORED_EMBEDDINGS" if classifier else "STORE_EMBEDDINGS"
+        config["program_mode"] = "TRAIN_PREDICT_FROM_STORED" if classifier else "ONLY_STORE_EMBEDDINGS"
         config["emb_dir"] = self.create_model_path("embeddings", model, dataset)
         config["log_dir"] = self.get_directory_path("logs")
         config["wandb_key"] = self.wandb_key
