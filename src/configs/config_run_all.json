@@ -1,0 +1,46 @@
+{
+  "models": [
+      {
+          "model_type": "ESM",
+          "max_tokens": 2000,
+          "batch_size": 64,
+          "env": "/home/share/huadjyin/home/caslavpetronic/.conda/envs/esm2/bin"
+      }
+  ],
+  "datasets": [
+      {
+          "dataset_name": "TOX",
+          "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_train.tsv",
+          "test": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_test.tsv",
+          "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_validation.tsv"
+      },
+      {
+        "dataset_name": "AMP",
+        "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_08_09_train.tsv",
+        "test": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_08_09_test.tsv",
+        "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_08_09_validation.tsv"
+      }
+  ],
+  "classifiers": [
+      {
+          "classifier_type": "MLP",
+          "batch_size": 64,
+          "num_epochs": 60,
+          "lr": 1e-3,
+          "hidden_layers": [1024, 512, 64],
+          "early_stop_patience": 4
+      },
+      {
+        "classifier_type": "XGBoost",
+        "max_tokens": 2000,
+        "batch_size": 64,
+        "n_estimators": 1000,
+        "eta": 0.05,
+        "early_stop": 8,
+        "max_depth": 9
+      }
+  ],
+  "run_name": "alpha",
+  "wandb_key": "a0cc1abd1b2f4273851d1c314f6be07342d3f151",
+  "workdir": "/home/share/huadjyin/home/caslavpetronic/projects/Metagenome-AI"
+}

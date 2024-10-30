@@ -88,6 +88,7 @@ class ConfigsGenerator:
         self.datasets = config.get("datasets", [])
         self.class_heads = config.get("classifiers", [])
         # Config Files
+        self.wandb_key = config.get("wandb_key", None)
         self.configs = []
 
     def get_configs(self):
@@ -197,6 +198,7 @@ class ConfigsGenerator:
         config["program_mode"] = "TRAIN_FROM_STORED_EMBEDDINGS" if classifier else "STORE_EMBEDDINGS"
         config["emb_dir"] = self.create_model_path("embeddings", model, dataset)
         config["log_dir"] = self.get_directory_path("logs")
+        config["wandb_key"] = self.wandb_key
         if classifier:
             config["pred_dir"] = self.get_directory_path("predictions")
             config["model_folder"] = self.create_model_path("classifiers", model, dataset, classifier)

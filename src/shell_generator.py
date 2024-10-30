@@ -17,13 +17,14 @@ class ShellGenerator:
         self.workdir = config.get("workdir")
         self.config_generator = config_generator
         self.sh_dir = os.path.join(self.config_generator.run_directory, "sh")
+        self.output_dir = os.path.join(self.sh_dir, "output")
         self.sh_template = """#!/bin/bash
 #DSUB -n {job_name}
 #DSUB -N 1
 #DSUB -A root.project.P24Z10200N0983
 #DSUB -R "cpu=12;gpu=1;mem=32000"
-#DSUB -oo train_classifier/%J.out
-#DSUB -eo train_classifier/%J.err
+#DSUB -oo {out_dir}/%J.out
+#DSUB -eo {out_dir}/%J.err
 
 # load module
 source /home/HPCBase/tools/module-5.2.0/init/profile.sh
@@ -55,6 +56,7 @@ python src/train.py -c {config_file}
         job_name = f"{run_mode}_{model_base_name}"
         sh_content = self.sh_template.format(
             job_name=job_name,
+            out_dir= self.output_dir,
             env_path=env_path,
             workdir=self.workdir,
             config_file=config_file
@@ -77,6 +79,7 @@ python src/train.py -c {config_file}
         # Create run mode directories for organizational structure if not existing
         for run_mode in self.config_generator.RUN_MODES:
             os.makedirs(os.path.join(self.sh_dir, run_mode), exist_ok=True)
+        os.makedirs(self.output_dir, exist_ok=True)
 
         configs = self.config_generator.get_configs()
 

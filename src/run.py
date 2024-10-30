@@ -4,6 +4,21 @@ import argparse
 import warnings
 import glob
 from shell_generator import *
+import time
+
+
+def get_dict(output: str) -> dict:
+    # Split the output into lines
+    lines = output.strip().split('\n')
+
+    # Extract headers from the first line and values from the second line
+    headers = lines[0].split()
+    values = lines[1].split()
+
+    # Map headers to values to create the dictionary
+    result_dict = {header: value for header, value in zip(headers, values)}
+
+    return result_dict
 
 
 def submit_jobs(job_dir):
@@ -14,15 +29,31 @@ def submit_jobs(job_dir):
         job_dir (str): Directory containing .sh files to submit.
     """
     print(f"Submitting all jobs in {job_dir}...")
-    processes = []
+    job_ids = []
     for sh_file in glob.glob(os.path.join(job_dir, "*.sh")):
-        process = subprocess.Popen(["dsub", "-s", sh_file])  # Assumes `dsub -s` command for job submission
-        processes.append(process)
+        submit_command = f"dsub -s {sh_file}"
+        result = subprocess.run(submit_command, shell=True, capture_output=True, text=True)
+        # Capture job ID from submission response
+        results_dict = get_dict(result.stdout)
+        job_id = results_dict["JOBID"] # Modify this based on your dsub output
+        job_ids.append(job_id)
 
-    # Wait for all jobs in the directory to finish
-    for process in processes:
-        process.wait()
-    print(f"All jobs in {job_dir} finished.")
+    for job_id in job_ids:
+        djob_command = f"djob {job_id}"
+        while True:
+            result = subprocess.run(djob_command, shell=True, capture_output=True, text=True)
+            results_dict = get_dict(result.stdout)
+            status = results_dict["JOB_STATE"]
+            if status == "COMPLETED":
+                print(f"Job: {job_id} COMPLETED")
+                break
+            elif status == "FAILED":
+                print(f"Job: {job_id} FAILED")
+                break
+            else:
+                # Waiting for jobs to complete...
+                print(f"Job: {job_id} {status}")
+                time.sleep(15)
 
 
 def run_analysis():
@@ -66,4 +97,4 @@ if __name__ == "__main__":
     submit_jobs(train_classifiers_dir)
 
     # Step 4: Run the analysis
-    run_analysis()
+    #run_analysis()
