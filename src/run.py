@@ -44,16 +44,14 @@ def submit_jobs(job_dir):
             result = subprocess.run(djob_command, shell=True, capture_output=True, text=True)
             results_dict = get_dict(result.stdout)
             status = results_dict["JOB_STATE"]
-            if status == "COMPLETED":
-                print(f"Job: {job_id} COMPLETED")
+            print(f"Job: {job_id} {status}")
+            if status == "SUCCEEDED":
                 break
             elif status == "FAILED":
-                print(f"Job: {job_id} FAILED")
                 break
             else:
                 # Waiting for jobs to complete...
-                print(f"Job: {job_id} {status}")
-                time.sleep(15)
+                time.sleep(60)
 
 
 def run_analysis():
@@ -90,7 +88,7 @@ if __name__ == "__main__":
 
     # Step 2: Submit and wait for jobs in the get_embeddings directory
     get_embeddings_dir = os.path.join(base_sh_dir, "create_embeddings")
-    submit_jobs(get_embeddings_dir)
+    #submit_jobs(get_embeddings_dir)
 
     # Step 3: Submit and wait for jobs in the train_classifiers directory
     train_classifiers_dir = os.path.join(base_sh_dir, "train_classifiers")
