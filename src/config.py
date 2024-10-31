@@ -119,9 +119,9 @@ class ConfigsGenerator:
             str: A formatted string to serve as the base name for the configuration file.
         """
         if classifier is None:
-            return f"{model['model_type']}_{database['dataset_name']}"
+            return f"{model['model_name']}_{database['dataset_name']}"
         else:
-            return f"{model['model_type']}_{database['dataset_name']}_{classifier['classifier_type']}"
+            return f"{model['model_name']}_{database['dataset_name']}_{classifier['classifier_name']}"
 
     def create_model_path(self, directory, model, database, classifier=None):
         """

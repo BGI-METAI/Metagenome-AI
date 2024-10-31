@@ -1,9 +1,9 @@
-import os
 import subprocess
 import argparse
 import warnings
-import glob
-from shell_generator import *
+from shell_generator import ShellGenerator
+from config import ConfigsGenerator, ConfigProviderFactory
+from analysis import Analyser
 import time
 
 
@@ -28,9 +28,8 @@ def submit_jobs(job_dir):
     Args:
         job_dir (str): Directory containing .sh files to submit.
     """
-    print(f"Submitting all jobs in {job_dir}...")
     job_ids = []
-    for sh_file in glob.glob(os.path.join(job_dir, "*.sh")):
+    for sh_file in job_dir:
         submit_command = f"dsub -s {sh_file}"
         result = subprocess.run(submit_command, shell=True, capture_output=True, text=True)
         # Capture job ID from submission response
@@ -73,26 +72,31 @@ if __name__ == "__main__":
     config = ConfigProviderFactory.get_config_provider(args.config_path)
 
     # Step 1: Generate Config
-
+    print("STEP1: Generating Config and Shell files")
     confGen = ConfigsGenerator(config)
-    print("Started generating config files...")
     confGen.generate()
-    print("...Finished generating config files!")
 
-    print("Started generating shell files...")
     shGen = ShellGenerator(config, confGen)
     shGen.generate()
-    print("...Finished generating shell files!")
 
     base_sh_dir = shGen.sh_dir
 
+    run_mode = config.get("run_mode")
+    if run_mode is None or len(run_mode) == 0 or run_mode == "RUN_ALL":
+        run_mode = ["CREATE_EMBEDDINGS", "TRAIN_CLASSIFIERS", "ANALYSE"]
+
     # Step 2: Submit and wait for jobs in the get_embeddings directory
-    get_embeddings_dir = os.path.join(base_sh_dir, "create_embeddings")
-    #submit_jobs(get_embeddings_dir)
+    if "CREATE_EMBEDDINGS" in run_mode:
+        print("STEP2: CREATING EMBEDDINGS")
+        submit_jobs(shGen.generated_sh_files["create_embeddings"])
 
     # Step 3: Submit and wait for jobs in the train_classifiers directory
-    train_classifiers_dir = os.path.join(base_sh_dir, "train_classifiers")
-    submit_jobs(train_classifiers_dir)
+    if "TRAIN_CLASSIFIERS" in run_mode:
+        print("STEP3: TRAINING CLASSIFIERS")
+        submit_jobs(shGen.generated_sh_files["train_classifiers"])
 
     # Step 4: Run the analysis
-    #run_analysis()
+    if "ANALYSE" in run_mode:
+        print("STEP4: ANALYSIS")
+        analyser = Analyser(confGen)
+        analyser.analyse()

@@ -18,13 +18,14 @@ class ShellGenerator:
         self.config_generator = config_generator
         self.sh_dir = os.path.join(self.config_generator.run_directory, "sh")
         self.output_dir = os.path.join(self.sh_dir, "output")
+        self.generated_sh_files = {"train_classifiers": [], "create_embeddings": []}
         self.sh_template = """#!/bin/bash
 #DSUB -n {job_name}
 #DSUB -N 1
 #DSUB -A root.project.P24Z10200N0983
 #DSUB -R "cpu=12;gpu=1;mem=32000"
-#DSUB -oo {out_dir}/%J.out
-#DSUB -eo {out_dir}/%J.err
+#DSUB -oo {out_dir}/{model_name}_%J.out
+#DSUB -eo {out_dir}/{model_name}_%J.err
 
 # load module
 source /home/HPCBase/tools/module-5.2.0/init/profile.sh
@@ -57,6 +58,7 @@ python src/train.py -c {config_file}
         sh_content = self.sh_template.format(
             job_name=job_name,
             out_dir= self.output_dir,
+            model_name= model_base_name,
             env_path=env_path,
             workdir=self.workdir,
             config_file=config_file
@@ -70,6 +72,8 @@ python src/train.py -c {config_file}
             file.write(sh_content)
 
         os.chmod(sh_file_path, 0o755)
+
+        self.generated_sh_files[run_mode].append(sh_file_path)
 
     def generate(self):
         """
