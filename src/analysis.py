@@ -37,8 +37,8 @@ class Analyser:
     def testing_models(self):
         # amp_df = pd.read_excel('../data/predictions/ripp_lab_validation/AMP_test.xlsx', sheet_name='AMP')
         amp_df = pd.read_csv(self.metrics_table_path)
-        amp_df.head()
-        amp_subset_df = amp_df[amp_df['Dataset'].isin(['AMP global', 'Toxicity'])]
+        #amp_df.head()
+        amp_subset_df = amp_df
 
         fig, axs = plt.subplots(nrows=1, ncols=1, figsize=(13, 7))
         barplot = sns.barplot(data=amp_subset_df[amp_subset_df['Metric'] == 'MCC'], x='Dataset', y='Score',

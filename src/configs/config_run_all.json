@@ -30,13 +30,13 @@
         "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_08_09_validation.tsv"
       },
       {
-        "dataset_name": "G+",
+        "dataset_name": "G_PLUS",
         "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_09_13_anti_Gram+_train.tsv",
         "test": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_09_13_anti_Gram+_test.tsv",
         "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_09_13_anti_Gram+_validation.tsv"
       },
       {
-        "dataset_name": "G-",
+        "dataset_name": "G_MINUS",
         "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_09_13_anti_Gram-_train.tsv",
         "test": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_09_13_anti_Gram-_test.tsv",
         "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_09_13_anti_Gram-_validation.tsv"
@@ -57,14 +57,14 @@
         "classifier_type": "XGBoost",
         "max_tokens": 2000,
         "batch_size": 64,
-        "n_estimators": 1000,
-        "eta": 0.05,
+        "n_estimators": 200,
+        "eta": 0.08,
         "early_stop": 8,
-        "max_depth": 9
+        "max_depth": 10
       }
   ],
   "run_name": "big_run",
   "wandb_key": "a0cc1abd1b2f4273851d1c314f6be07342d3f151",
   "workdir": "/home/share/huadjyin/home/caslavpetronic/projects/Metagenome-AI",
-  "run_mode": null
+  "run_mode": ["CREATE_EMBEDDINGS", "TRAIN_CLASSIFIERS", "ANALYSE"]
 }

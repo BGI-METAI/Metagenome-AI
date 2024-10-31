@@ -247,12 +247,13 @@ def train_classifier_from_stored_single_gpu(config, logger):
     if test_ds.get_number_of_labels() > 2:
         multilabel_acc = multilabel_acc / len(test_dataloader)
         # Append multilabel accuracy to the DataFrame
-        results_df = results_df.append({
-            "Base model": config['model_name'],
+        new_row = pd.DataFrame([{
+            "Base model": f"{config['model_name']}_{config['classifier_name']}",
             "Score": multilabel_acc * 100,
             "Dataset": config['dataset_name'],
             "Metric": "Multilabel Accuracy"
-        }, ignore_index=True)
+            }])
+        results_df = pd.concat([results_df, new_row], ignore_index=True)
         logger.info(f"[TEST SET] Multilabel accuracy: {multilabel_acc * 100:.2f}%")
 
     else:
@@ -261,12 +262,13 @@ def train_classifier_from_stored_single_gpu(config, logger):
 
         # Append each metric to the DataFrame
         for metric, score in test_set_metrics.items():
-            results_df = results_df.append({
-                "Base model": config['model_name'],
+            new_row = pd.DataFrame([{
+                "Base model": f"{config['model_name']}_{config['classifier_name']}",
                 "Score": score[0] * 100,
                 "Dataset": config['dataset_name'],
                 "Metric": metric
-            }, ignore_index=True)
+            }])
+            results_df = pd.concat([results_df, new_row], ignore_index=True)
 
         logger.info(f"\nTest set scores \n{results_df.to_string(index=False)}")
         logger.info(
