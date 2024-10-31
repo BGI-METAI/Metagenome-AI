@@ -6,6 +6,11 @@ pytorch-lightning
 datasets
 pandas
 matplotlib
+matplotlib-venn
+seaborn
+glob2
+pandas
+venny4py
 wandb
 transformers
 xgboost
