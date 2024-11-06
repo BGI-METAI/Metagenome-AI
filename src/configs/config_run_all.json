@@ -14,7 +14,22 @@
         "max_tokens": 2000,
         "batch_size": 64,
         "env": "/home/share/huadjyin/home/caslavpetronic/.conda/envs/esm2/bin"
-    }
+      },
+      {
+        "model_name":  "ESM3",
+        "model_type": "ESM3",
+        "max_tokens": 2500,
+        "batch_size": 200,
+        "env": "/home/share/huadjyin/home/caslavpetronic/.conda/envs/esm3/bin"
+      },
+      {
+        "model_name":  "PTrans",
+        "model_type": "PTRANS",
+        "max_tokens": 2500,
+        "batch_size": 200,
+        "model_name_or_path": "Rostlab/prot_t5_xl_uniref50",
+        "env": "/home/share/huadjyin/home/caslavpetronic/.conda/envs/esm2/bin"
+      }
   ],
   "datasets": [
       {
@@ -43,6 +58,15 @@
       }
   ],
   "classifiers": [
+      {
+          "classifier_name": "MLP",
+          "classifier_type": "MLP",
+          "batch_size": 64,
+          "num_epochs": 50,
+          "lr": 5e-3,
+          "hidden_layers": null,
+          "early_stop_patience": 4
+      },
       {
           "classifier_name": "MLP_3HL",
           "classifier_type": "MLP",

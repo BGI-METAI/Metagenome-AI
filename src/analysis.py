@@ -40,12 +40,12 @@ class Analyser:
         #amp_df.head()
         amp_subset_df = amp_df
 
-        fig, axs = plt.subplots(nrows=1, ncols=1, figsize=(13, 7))
+        fig, axs = plt.subplots(nrows=1, ncols=1, figsize=(16, 7))
         barplot = sns.barplot(data=amp_subset_df[amp_subset_df['Metric'] == 'MCC'], x='Dataset', y='Score',
                               hue='Base model')
         plt.ylim([50, 100])
         plt.grid(zorder=0, linewidth=1, linestyle=':', color='k')
-        plt.legend(prop={'size': 11})
+        plt.legend(prop={'size': 10}, bbox_to_anchor=(0.60, 1), loc='center')
         plt.box(False)
 
         # Annotate each bar with the value inside
@@ -54,7 +54,7 @@ class Analyser:
                              (p.get_x() + p.get_width() / 2., p.get_height()),
                              ha='center', va='center',
                              xytext=(0, 9), textcoords='offset points',
-                             fontsize=12, fontweight='bold')  # Set font size and bold
+                             fontsize=10, fontweight='bold')  # Set font size and bold
         save_fig_path = os.path.join(self.analysis_dir, f'testing_models.png')
         plt.savefig(save_fig_path, dpi=200, bbox_inches='tight')
 
