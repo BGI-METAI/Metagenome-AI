@@ -65,7 +65,8 @@ def choose_classifier(config, input_dimensions, output_dimensions):
         return classifiers.MLPClassifier(input_dim=input_dimensions, output_dim=output_dimensions, config=config)
     elif config["classifier_type"] == "XGBoost":
         return classifiers.XGBoostClassifier(input_dim=input_dimensions, output_dim=output_dimensions, config=config)
-
+    elif config["classifier_type"] == "LightGBM":
+        return classifiers.LightGBMClassifier(input_dim=input_dimensions, output_dim=output_dimensions, config=config)
     raise NotImplementedError("This type of classifier is not supported")
 
 

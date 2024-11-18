@@ -21,7 +21,7 @@ import pandas as pd
 import torch
 from torch.utils import data
 
-from torcheval.metrics import MultilabelAccuracy
+#from torcheval.metrics import MultilabelAccuracy
 import wandb
 import time
 
@@ -197,7 +197,6 @@ def train_classifier_from_stored_single_gpu(config, logger):
     # Test loop
     all_outputs = []  # List to collect model outputs
     all_targets = []  # List to collect targets/labels
-    multilabel_acc = 0
 
     predictions_path = init_predictions_path(config, timestamp)
 
@@ -213,29 +212,21 @@ def train_classifier_from_stored_single_gpu(config, logger):
         # Append the current batch targets and outputs to the lists
         all_targets.append(targets)  # Append to Python list
         all_outputs.append(outputs)  # Append to Python list
-
-        if test_ds.get_number_of_labels() > 2:
-            metric = MultilabelAccuracy()
-            metric.update(outputs, torch.where(targets > 0, 1, 0))
-            multilabel_acc += metric.compute()
-            # pass
-            # code to save results in .tsv
-        else:
-            proba = torch.nn.functional.softmax(outputs)
-            prediction_proba = torch.max(proba, dim=1)
-            values_rounded = [
-                round(p, 4) for p in prediction_proba.values.cpu().numpy()
-            ]
-            with open(predictions_path, "a") as file:
-                writer = csv.writer(file, delimiter="\t")
-                content = list(
-                    zip(
-                        batch["protein_id"],
-                        prediction_proba.indices.cpu().numpy(),
-                        values_rounded,
-                    )
+        proba = torch.nn.functional.softmax(outputs)
+        prediction_proba = torch.max(proba, dim=1)
+        values_rounded = [
+            round(p, 4) for p in prediction_proba.values.cpu().numpy()
+        ]
+        with open(predictions_path, "a") as file:
+            writer = csv.writer(file, delimiter="\t")
+            content = list(
+                zip(
+                    batch["protein_id"],
+                    prediction_proba.indices.cpu().numpy(),
+                    values_rounded,
                 )
-                writer.writerows(content)
+            )
+            writer.writerows(content)
 
     # Concatenate all the targets and outputs at the end, after the loop
     all_targets = torch.cat(all_targets)
@@ -243,37 +234,23 @@ def train_classifier_from_stored_single_gpu(config, logger):
 
     results_df = pd.DataFrame(columns=["Base model", "Score", "Dataset", "Metric"])
 
-    # Test logic based on binary or multilabel classification
-    if test_ds.get_number_of_labels() > 2:
-        multilabel_acc = multilabel_acc / len(test_dataloader)
-        # Append multilabel accuracy to the DataFrame
+    # Calculate metrics on the test set
+    test_set_metrics = calc_metrics(all_targets, all_outputs)
+
+    # Append each metric to the DataFrame
+    for metric, score in test_set_metrics.items():
         new_row = pd.DataFrame([{
             "Base model": f"{config['model_name']}_{config['classifier_name']}",
-            "Score": multilabel_acc * 100,
+            "Score": score[0] * 100,
             "Dataset": config['dataset_name'],
-            "Metric": "Multilabel Accuracy"
-            }])
+            "Metric": metric
+        }])
         results_df = pd.concat([results_df, new_row], ignore_index=True)
-        logger.info(f"[TEST SET] Multilabel accuracy: {multilabel_acc * 100:.2f}%")
 
-    else:
-        # Calculate metrics on the test set
-        test_set_metrics = calc_metrics(all_targets, all_outputs)
-
-        # Append each metric to the DataFrame
-        for metric, score in test_set_metrics.items():
-            new_row = pd.DataFrame([{
-                "Base model": f"{config['model_name']}_{config['classifier_name']}",
-                "Score": score[0] * 100,
-                "Dataset": config['dataset_name'],
-                "Metric": metric
-            }])
-            results_df = pd.concat([results_df, new_row], ignore_index=True)
-
-        logger.info(f"\nTest set scores \n{results_df.to_string(index=False)}")
-        logger.info(
-            f"[TEST SET] Accuracy: {test_set_metrics['Accuracy'][0] * 100:.2f}% F1: {test_set_metrics['F1-score'][0] * 100:.2f}%"
-        )
+    logger.info(f"\nTest set scores \n{results_df.to_string(index=False)}")
+    logger.info(
+        f"[TEST SET] Accuracy: {test_set_metrics['Accuracy'][0] * 100:.2f}% F1: {test_set_metrics['F1-score'][0] * 100:.2f}%"
+    )
 
     # Save the DataFrame to a CSV file
     output_path = os.path.join(config['model_folder'], f"{config['model_basename']}.csv")

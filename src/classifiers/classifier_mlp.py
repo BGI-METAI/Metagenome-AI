@@ -6,7 +6,6 @@ from torch.utils import data
 from utils.wandb import init_wandb
 import torch
 import pandas as pd
-from torcheval.metrics import MultilabelAccuracy
 from utils.early_stopper import EarlyStopper
 from utils.metrics import calc_metrics
 import logging
@@ -124,7 +123,7 @@ class MLPClassifier(Classifier):
             all_targets = []
             self.model.eval()
             with torch.no_grad():
-                multilabel_acc = val_loss = 0
+                val_loss = 0
                 for batch in valid_dataloader:
                     targets = batch["labels"].squeeze().to(self.device)
                     embeddings = batch["emb"].to(self.device)
@@ -133,11 +132,6 @@ class MLPClassifier(Classifier):
                     val_loss += loss.item()
                     all_targets.append(targets.cpu())
                     all_outputs.append(outputs.cpu())
-                    if valid_ds.get_number_of_labels() > 2:
-                        # metric = MultilabelAccuracy(criteria="hamming")
-                        metric = MultilabelAccuracy()
-                        metric.update(outputs, torch.where(targets > 0, 1, 0))
-                        multilabel_acc += metric.compute()
 
                 all_targets = torch.cat(all_targets)
                 all_outputs = torch.cat(all_outputs)
@@ -146,13 +140,8 @@ class MLPClassifier(Classifier):
 
                 val_loss = val_loss / len(valid_dataloader)
                 wandb.log({"validation loss": val_loss})
-
-                if valid_ds.get_number_of_labels() > 2:
-                    multilabel_acc = multilabel_acc / len(valid_dataloader)
-                    wandb.log({"validation multilabel accuracy": multilabel_acc})
-                else:
-                    wandb.log({"validation accuracy": epoch_metrics['Accuracy'][0]})
-                    wandb.log({"validation f1_score": epoch_metrics['F1-score'][0]})
+                wandb.log({"validation accuracy": epoch_metrics['Accuracy'][0]})
+                wandb.log({"validation f1_score": epoch_metrics['F1-score'][0]})
             logger.warning(
                 f"Validation loss: {val_loss:.2f} Training loss: {train_loss:.2f}"
             )
