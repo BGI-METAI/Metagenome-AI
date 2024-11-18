@@ -36,7 +36,7 @@ def choose_llm(config):
         Embedding: A subclass of class Embedding
     """
     if config["model_type"] == "ESM":
-        return embeddings.EsmEmbedding(config)
+        return embeddings.ESM2Factory.create_esm_model(config)
     elif config["model_type"] == "ESM3":
         return embeddings.Esm3Embedding(config)
     elif config["model_type"] == "PTRANS":
@@ -61,8 +61,12 @@ def choose_classifier(config, input_dimensions, output_dimensions):
         Embedding: A subclass of class Embedding
     """
     if config["classifier_type"] == "MLP":
-        return classifiers.MLPClassifier(input_dim=input_dimensions, output_dim=output_dimensions, config=config)
+        return classifiers.MLPClassifier(
+            input_dim=input_dimensions, output_dim=output_dimensions, config=config
+        )
     elif config["classifier_type"] == "XGBoost":
-        return classifiers.XGBoostClassifier(input_dim=input_dimensions, output_dim=output_dimensions, config=config)
+        return classifiers.XGBoostClassifier(
+            input_dim=input_dimensions, output_dim=output_dimensions, config=config
+        )
 
     raise NotImplementedError("This type of classifier is not supported")
