@@ -288,12 +288,11 @@ if __name__ == "__main__":
     if config["program_mode"] == valid_modes[0]:  # ONLY_STORE_EMBEDDINGS
         # mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
         store_embeddings(config, logger)
-        plot_embeddings_umap(config, num_samples=2000)
     elif config["program_mode"] == valid_modes[1]:  # TRAIN_PREDICT_FROM_STORED
-        plot_embeddings_umap(config, num_samples=2000)
-        train_classifier_from_stored_single_gpu(config, logger)
+        train_classifier_from_stored_single_gpu(config)
     elif config["program_mode"] == valid_modes[2]:  # RUN_ALL
         # mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
-        plot_embeddings_umap(config, num_samples=2000)
         store_embeddings(config, logger)
         train_classifier_from_stored_single_gpu(config, logger)
+        
+    plot_embeddings_umap(config)
