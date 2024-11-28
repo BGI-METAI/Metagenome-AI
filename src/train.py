@@ -35,6 +35,7 @@ import torch.distributed as dist
 from dataset import TSVDataset, MaxTokensLoader
 from config import ConfigProviderFactory, choose_classifier, choose_llm
 from utils.metrics import calc_metrics
+from utils.umap_visual import plot_embeddings_umap
 
 
 def init_logger(config, timestamp):
@@ -288,8 +289,10 @@ if __name__ == "__main__":
         # mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
         store_embeddings(config, logger)
     elif config["program_mode"] == valid_modes[1]:  # TRAIN_PREDICT_FROM_STORED
-        train_classifier_from_stored_single_gpu(config, logger)
+        train_classifier_from_stored_single_gpu(config)
     elif config["program_mode"] == valid_modes[2]:  # RUN_ALL
         # mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
         store_embeddings(config, logger)
         train_classifier_from_stored_single_gpu(config, logger)
+        
+    plot_embeddings_umap(config)
