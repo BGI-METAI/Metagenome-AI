@@ -31,14 +31,14 @@ from dataset import TSVDataset
 
 def plot_embeddings_umap(config):
 
-    num_samples = config.get('num_samples', None)
+    umap_num_samples = config.get('umap_num_samples', None)
 
     # Skip UMAP processing if it's not defined or set to 0
-    if num_samples is None or num_samples == 0:
+    if umap_num_samples is None or umap_num_samples == 0:
         logging.info("Skipping UMAP visualization.")
         return  
 
-    logging.info(f"Running UMAP visualization with {num_samples} samples.")
+    logging.info(f"Running UMAP visualization with {umap_num_samples} samples.")
     
     # Load datasets
     train_ds = TSVDataset(config["train"], config["emb_dir"], "mean")
@@ -46,9 +46,9 @@ def plot_embeddings_umap(config):
     test_ds = TSVDataset(config["test"], config["emb_dir"], "mean")
 
     # Select random samples from datasets
-    sel_train_emb, _ = select_random_sequences(train_ds, num_samples)
-    sel_valid_emb, _ = select_random_sequences(valid_ds, num_samples)
-    sel_test_emb, sel_test_lab = select_random_sequences(test_ds, num_samples)
+    sel_train_emb, _ = select_random_sequences(train_ds, umap_num_samples)
+    sel_valid_emb, _ = select_random_sequences(valid_ds, umap_num_samples)
+    sel_test_emb, sel_test_lab = select_random_sequences(test_ds, umap_num_samples)
 
     # Combine all embeddings and labels
     all_emb = sel_train_emb + sel_valid_emb + sel_test_emb
@@ -92,7 +92,7 @@ def plot_embeddings_umap(config):
     logging.info(f"UMAP visualization saved as {os.path.abspath(figname)}")
 
 
-def select_random_sequences(dataset, num_samples):
+def select_random_sequences(dataset, umap_num_samples):
 
     active, inactive = [], []
 
@@ -105,9 +105,9 @@ def select_random_sequences(dataset, num_samples):
 
     # Determine number of samples per class
     if len(active)==0 or len(inactive)==0:  
-        num_samples_per_class = min(num_samples, len(active) + len(inactive))
+        num_samples_per_class = min(umap_num_samples, len(active) + len(inactive))
     else:
-        num_samples_per_class = min(num_samples // 2, len(active), len(inactive))
+        num_samples_per_class = min(umap_num_samples // 2, len(active), len(inactive))
 
     # Randomly select samples
     rand_sel_active = [] if len(active)==0 else random.sample(active, num_samples_per_class)
