@@ -35,6 +35,7 @@ import torch.distributed as dist
 from dataset import TSVDataset, MaxTokensLoader
 from config import ConfigProviderFactory, choose_classifier, choose_llm
 from utils.metrics import calc_metrics
+import pandas as pd
 
 
 def init_logger(config, timestamp):
@@ -72,7 +73,8 @@ def init_predictions_path(config, timestamp):
     # Ensure the directory exists, create it if not
     os.makedirs(pred_dir, exist_ok=True)
     # Build the tsv file path
-    pred_file_path = os.path.join(pred_dir, f"predictions_{config['model_type']}_{config['classifier_type']}_{timestamp}.tsv")
+    pred_file_path = os.path.join(pred_dir,
+                                  f"predictions_{config['model_type']}_{config['classifier_type']}_{timestamp}.tsv")
 
     return pred_file_path
 
@@ -239,15 +241,44 @@ def train_classifier_from_stored_single_gpu(config, logger):
     all_targets = torch.cat(all_targets)
     all_outputs = torch.cat(all_outputs)
 
+    results_df = pd.DataFrame(columns=["Base model", "Score", "Dataset", "Metric"])
+
+    # Test logic based on binary or multilabel classification
     if test_ds.get_number_of_labels() > 2:
         multilabel_acc = multilabel_acc / len(test_dataloader)
+        # Append multilabel accuracy to the DataFrame
+        new_row = pd.DataFrame([{
+            "Base model": f"{config['model_name']}_{config['classifier_name']}",
+            "Score": multilabel_acc * 100,
+            "Dataset": config['dataset_name'],
+            "Metric": "Multilabel Accuracy"
+            }])
+        results_df = pd.concat([results_df, new_row], ignore_index=True)
         logger.info(f"[TEST SET] Multilabel accuracy: {multilabel_acc * 100:.2f}%")
+
     else:
         # Calculate metrics on the test set
         test_set_metrics = calc_metrics(all_targets, all_outputs)
-        logger.info(f"\nTest set scores \n{test_set_metrics.to_string(index=False)}")
+
+        # Append each metric to the DataFrame
+        for metric, score in test_set_metrics.items():
+            new_row = pd.DataFrame([{
+                "Base model": f"{config['model_name']}_{config['classifier_name']}",
+                "Score": score[0] * 100,
+                "Dataset": config['dataset_name'],
+                "Metric": metric
+            }])
+            results_df = pd.concat([results_df, new_row], ignore_index=True)
+
+        logger.info(f"\nTest set scores \n{results_df.to_string(index=False)}")
         logger.info(
-            f"[TEST SET] Accuracy: {test_set_metrics['Accuracy'][0] * 100:.2f}% F1: {test_set_metrics['F1-score'][0] * 100:.2f}%")
+            f"[TEST SET] Accuracy: {test_set_metrics['Accuracy'][0] * 100:.2f}% F1: {test_set_metrics['F1-score'][0] * 100:.2f}%"
+        )
+
+    # Save the DataFrame to a CSV file
+    output_path = os.path.join(config['model_folder'], f"{config['model_basename']}.csv")
+    results_df.to_csv(output_path, index=False)
+    logger.info(f"Results saved to {output_path}")
 
 
 if __name__ == "__main__":
