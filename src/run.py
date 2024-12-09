@@ -1,3 +1,62 @@
+"""
+===============================================================================
+File Name: run.py
+Purpose:
+    This script is specifically designed for running multiple threads on the
+    Wuhan Cluster. It leverages the DSUB protocol to submit, monitor, and manage
+    batch jobs in a high-performance computing (HPC) environment. Users should
+    exercise caution and only utilize this script if they are familiar with the
+    DSUB workflow and the implications of running large-scale computations on
+    the Wuhan Cluster.
+
+Warning:
+    - Unauthorized or improper usage of this script may interfere with other
+      jobs on the Wuhan Cluster or lead to unintended resource consumption.
+    - Ensure that all configurations are correct and the cluster policies
+      are adhered to before submission.
+
+About DSUB Protocol:
+    DSUB is a job submission and management tool designed for distributed
+    systems. It allows users to:
+    - Submit jobs using shell scripts or commands.
+    - Monitor the status of submitted jobs.
+    - Automate workflows across large computing clusters.
+
+    This script makes use of the DSUB protocol through the commands `dsub -s`
+    for job submission and `djob` for job monitoring. These commands facilitate
+    efficient job execution and provide feedback on job statuses (e.g.,
+    SUCCEEDED, FAILED, or RUNNING).
+
+Usage:
+    To run the script you need config.json file. The `config_run_all.json` file is provided as an example:
+
+    1. **models**: Specifies the machine learning models to use, including model type,
+       token limit, batch size, and environment path.
+
+    2. **datasets**: Lists datasets for training, testing, and validation, with paths
+       to each dataset file.
+
+    3. **classifiers**: Defines the classifiers to use (e.g., `MLP`, `XGBoost`) along with
+       hyperparameters like batch size, epochs, and learning rate.
+
+    4. **run_name**: A name for the current run, used for tracking. The directory with the same name will be created.
+
+    5. **wandb_key**: API key for Weights & Biases experiment tracking.
+
+    6. **workdir**: Path to the project directory for saving outputs and logs.
+
+    7. **run_mode**: Specifies which steps to run: `CREATE_EMBEDDINGS`, `TRAIN_CLASSIFIERS`,
+       `ANALYSE`. If set to None it will automatically run all steps.
+
+Disclaimer:
+    Use this script at your own risk. The authors take no responsibility for
+    any unintended consequences arising from its usage.
+
+===============================================================================
+"""
+
+
+
 import subprocess
 import argparse
 import warnings
