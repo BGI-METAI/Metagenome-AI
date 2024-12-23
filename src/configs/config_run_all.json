@@ -1,0 +1,93 @@
+{
+  "models": [
+      {
+          "model_name":  "ESM2_650M",
+          "model_type": "ESM",
+          "max_tokens": 2000,
+          "batch_size": 64,
+          "env": "/home/share/huadjyin/home/caslavpetronic/.conda/envs/esm2/bin"
+      },
+      {
+        "model_name":  "ESM2_3B",
+        "model_type": "ESM",
+        "model_name_or_path": "esm2_t36_3B_UR50D",
+        "max_tokens": 2000,
+        "batch_size": 64,
+        "env": "/home/share/huadjyin/home/caslavpetronic/.conda/envs/esm2/bin"
+      },
+      {
+        "model_name":  "ESM3",
+        "model_type": "ESM3",
+        "max_tokens": 2500,
+        "batch_size": 200,
+        "env": "/home/share/huadjyin/home/caslavpetronic/.conda/envs/esm3/bin"
+      },
+		{
+		  "model_name":  "PTRANS",
+		  "model_type": "PTRANS",
+		  "max_tokens": 2500,
+		  "batch_size": 200,
+		  "model_name_or_path": "/home/share/huadjyin/home/chenjunhong/META_AI/models/ptrans/prot_t5_xl_uniref50",
+		  "env": "/home/share/huadjyin/home/caslavpetronic/.conda/envs/esm2/bin"
+		}
+  ],
+  "datasets": [
+      {
+          "dataset_name": "TOX",
+          "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_train.tsv",
+          "test": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_test.tsv",
+          "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_validation.tsv"
+      },
+      {
+        "dataset_name": "AMP",
+        "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_08_09_train.tsv",
+        "test": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_08_09_test.tsv",
+        "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_08_09_validation.tsv"
+      },
+      {
+        "dataset_name": "G_PLUS",
+        "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_09_13_anti_Gram+_train.tsv",
+        "test": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_09_13_anti_Gram+_test.tsv",
+        "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_09_13_anti_Gram+_validation.tsv"
+      },
+      {
+        "dataset_name": "G_MINUS",
+        "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_09_13_anti_Gram-_train.tsv",
+        "test": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_09_13_anti_Gram-_test.tsv",
+        "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/AMP/AMP_2024_09_13_anti_Gram-_validation.tsv"
+      }
+  ],
+  "classifiers": [
+      {
+          "classifier_name": "MLP",
+          "classifier_type": "MLP",
+          "batch_size": 64,
+          "num_epochs": 50,
+          "lr": 5e-3,
+          "hidden_layers": null,
+          "early_stop_patience": 4
+      },
+      {
+          "classifier_name": "MLP_3HL",
+          "classifier_type": "MLP",
+          "batch_size": 64,
+          "num_epochs": 60,
+          "lr": 1e-3,
+          "hidden_layers": [1024, 256, 64],
+          "early_stop_patience": 4
+      },
+      {
+        "classifier_name": "XGBoost",
+        "classifier_type": "XGBoost",
+        "max_tokens": 2000,
+        "batch_size": 64,
+		"num_epochs": 100,
+		"lr": 0.08
+      }
+
+  ],
+  "run_name": "big_run",
+  "wandb_key": "a0cc1abd1b2f4273851d1c314f6be07342d3f151",
+  "workdir": "/home/share/huadjyin/home/caslavpetronic/projects/Metagenome-AI",
+  "run_mode": ["CREATE_EMBEDDINGS", "TRAIN_CLASSIFIERS", "ANALYSE"]
+}
