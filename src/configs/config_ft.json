@@ -1,0 +1,15 @@
+{
+  "train": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_train.tsv",
+  "test": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_test.tsv",
+  "valid": "/home/share/huadjyin/home/chenjunhong/META_AI/datasets/tox_merged/tox_validation.tsv",
+  "checkpoint": "facebook/esm2_t36_3B_UR50D",
+  "batch_size": 16,
+  "num_epochs": 3,
+  "lr": 1e-4,
+  "model_name": "3B_ESM_e3",
+  "save_dir": "./finetuned_esm3b",
+  "num_steps":400,
+  "lora": true,
+  "classifier_path": null,
+  "wandb_key": "66bdf7f04d7842bb591556f5263dd9c779ca1ce7"
+}

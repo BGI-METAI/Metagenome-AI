@@ -22,10 +22,10 @@ from esm.tokenization.sequence_tokenizer import EsmSequenceTokenizer
 from esm.pretrained import ESM3_sm_open_v0
 from huggingface_hub.hf_api import HfFolder
 
-from embeddings.embedding_esm import EsmEmbedding
+from embeddings.embedding_esm import EsmTorchHubEmbedding
 
 
-class Esm3Embedding(EsmEmbedding):
+class Esm3Embedding(EsmTorchHubEmbedding):
     def __init__(self, config, pooling="mean"):
         # login(token="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")
         # HfFolder.save_token(access_token)
