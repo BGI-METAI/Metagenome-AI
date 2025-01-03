@@ -1,5 +1,5 @@
 try:
-    from embeddings.embedding_esm import EsmEmbedding
+    from embeddings.embedding_esm import ESM2Factory
 except ImportError:
     print("You are missing some of the libraries for ESM")
 try:

@@ -16,11 +16,99 @@ from torch.nn import Identity
 import pickle
 import pathlib
 import logging
+from transformers import AutoTokenizer, AutoModel, DataCollatorWithPadding
 
 from embeddings.embedding import Embedding
 
 
-class EsmEmbedding(Embedding):
+class ESM2Factory:
+    @staticmethod
+    def create_esm_model(config, pooling="mean"):
+        if "huggingface_model" in config:
+            return EsmHuggingFaceEmbedding(config, pooling)
+        else:
+            return EsmTorchHubEmbedding(config, pooling)
+
+
+class EsmHuggingFaceEmbedding(Embedding):
+    def __init__(self, config, pooling="mean"):
+        checkpoint = config["huggingface_model"]
+        self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+        self.model = AutoModel.from_pretrained(checkpoint)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.collator = DataCollatorWithPadding(self.tokenizer)
+        # self.model.esm  - i onda last_hidden_state
+        # output
+
+    def get_embedding(self, batch):
+        raise NotImplementedError()
+
+    def get_embedding_dim(self, batch=None):
+        return self.model.config.hidden_size
+
+    def to(self, device):
+        self.model = self.model.to(device)
+
+    def store_embeddings(self, batch, out_dir):
+        """Store each protein embedding in a separate file named [protein_id].pkl
+
+        Save all types of poolings such that each file has a [3, emb_dim]
+        where rows 0, 1, 2 are mean, max, cls pooled respectively
+
+        Args:
+            batch: Each sample contains protein_id and sequence
+        """
+        pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
+        batch_tokens = self.tokenizer(batch["sequence"])
+        batch_tokens = self.collator(batch_tokens).to(self.device)
+        with torch.no_grad():
+            batch_res = self.model(**batch_tokens)
+
+        exclude_eos_mask = (
+            batch_tokens["attention_mask"].sum(dim=1) - 1
+        )  # <eos> is the last token
+        attention_mask = batch_tokens["attention_mask"]
+        batch_indices = torch.arange(attention_mask.shape[0])
+        attention_mask[batch_indices, exclude_eos_mask] = 0  # exclude <eos>
+        attention_mask[batch_indices, 0] = 0  # exclude <cls>
+        embeddings = batch_res.last_hidden_state * attention_mask.unsqueeze(-1)
+        esm_result = embeddings.detach().cpu()
+
+        mean_embeddings = esm_result.mean(dim=1)
+        cls_embeddings = batch_res.last_hidden_state[:, 0, :].cpu()
+
+        for protein_id, mean_emb, cls_emb in zip(
+            batch["protein_id"], mean_embeddings, cls_embeddings
+        ):
+            embeddings_dict = {
+                "mean": mean_emb.numpy(),
+                "cls": cls_emb.numpy(),
+            }
+            with open(f"{out_dir}/{protein_id}.pkl", "wb") as file:
+                pickle.dump(embeddings_dict, file)
+
+    def _pooling(self, strategy, tensors, batch_tokens, pad_token_id):
+        """Perform pooling on [batch_size, seq_len, emb_dim] tensor
+
+        Args:
+            strategy: One of the values ["mean", "max", "cls"]
+        """
+        if strategy == "cls":
+            seq_repr = tensors[:, 0, :]
+        elif strategy == "mean":
+            seq_repr = []
+            batch_lens = (batch_tokens != pad_token_id).sum(1)
+
+            for i, tokens_len in enumerate(batch_lens):
+                seq_repr.append(tensors[i, 1 : tokens_len - 1].mean(0))
+
+            seq_repr = torch.vstack(seq_repr)
+        else:
+            raise NotImplementedError("This type of pooling is not supported")
+        return seq_repr
+
+
+class EsmTorchHubEmbedding(Embedding):
     def __init__(self, config, pooling="mean"):
         if "model_name_or_path" in config:
             esm_model_path = config["model_name_or_path"]
@@ -29,10 +117,14 @@ class EsmEmbedding(Embedding):
         model, alphabet = esm.pretrained.load_model_and_alphabet(esm_model_path)
         # model, alphabet = esm.pretrained.esm2_t12_35M_UR50D()
         self.model = model
-        
-        if ('finetune_model_path' in config) and os.path.exists(config['finetune_model_path']):
-            self.model.load_state_dict(torch.load(config['finetune_model_path']))
-            logging.info(f"Using finetuned moedel. Path: {config['finetune_model_path']}")
+
+        if ("finetune_model_path" in config) and os.path.exists(
+            config["finetune_model_path"]
+        ):
+            self.model.load_state_dict(torch.load(config["finetune_model_path"]))
+            logging.info(
+                f"Using finetuned moedel. Path: {config['finetune_model_path']}"
+            )
 
         self.alphabet = alphabet
         self.model.contact_head = Identity()

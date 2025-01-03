@@ -6,7 +6,8 @@ from torch.utils import data
 from utils.wandb import init_wandb
 import torch
 import pandas as pd
-from torcheval.metrics import MultilabelAccuracy
+
+# from torcheval.metrics import MultilabelAccuracy
 from utils.early_stopper import EarlyStopper
 from utils.metrics import calc_metrics
 import logging
@@ -87,7 +88,9 @@ class MLPClassifier(Classifier):
         )
 
         run = init_wandb(config["model_folder"], timestamp, self.model)
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=config.get("lr", 0.001), eps=1e-9)
+        optimizer = torch.optim.Adam(
+            self.model.parameters(), lr=config.get("lr", 0.001), eps=1e-9
+        )
         scheduler = StepLR(optimizer, step_size=3, gamma=0.5)
         early_stopper = EarlyStopper(patience=config.get("early_stop_patience", 4))
         # A 2-class problem can be modeled as:
@@ -134,6 +137,9 @@ class MLPClassifier(Classifier):
                     all_targets.append(targets.cpu())
                     all_outputs.append(outputs.cpu())
                     if valid_ds.get_number_of_labels() > 2:
+                        raise NotImplementedError(
+                            "This feature for multilabel classification has not been fully implemented yet."
+                        )
                         # metric = MultilabelAccuracy(criteria="hamming")
                         metric = MultilabelAccuracy()
                         metric.update(outputs, torch.where(targets > 0, 1, 0))
@@ -142,7 +148,9 @@ class MLPClassifier(Classifier):
                 all_targets = torch.cat(all_targets)
                 all_outputs = torch.cat(all_outputs)
                 epoch_metrics = calc_metrics(all_targets, all_outputs)
-                all_metrics_df = pd.concat([all_metrics_df, epoch_metrics], ignore_index=True)
+                all_metrics_df = pd.concat(
+                    [all_metrics_df, epoch_metrics], ignore_index=True
+                )
 
                 val_loss = val_loss / len(valid_dataloader)
                 wandb.log({"validation loss": val_loss})
@@ -151,8 +159,8 @@ class MLPClassifier(Classifier):
                     multilabel_acc = multilabel_acc / len(valid_dataloader)
                     wandb.log({"validation multilabel accuracy": multilabel_acc})
                 else:
-                    wandb.log({"validation accuracy": epoch_metrics['Accuracy'][0]})
-                    wandb.log({"validation f1_score": epoch_metrics['F1-score'][0]})
+                    wandb.log({"validation accuracy": epoch_metrics["Accuracy"][0]})
+                    wandb.log({"validation f1_score": epoch_metrics["F1-score"][0]})
             logger.warning(
                 f"Validation loss: {val_loss:.2f} Training loss: {train_loss:.2f}"
             )
@@ -174,8 +182,10 @@ class MLPClassifier(Classifier):
             # wandb.log({"batch": batch_idx, "loss": 0.3})
             # wandb.log({"epoch": epoch, "val_acc": 0.94})
         all_metrics_df.index = all_metrics_df.index + 1
-        all_metrics_df = all_metrics_df.reset_index().rename(columns={'index': 'Epoch'})
-        logger.info(f"\nValidation set scores per epoch \n {all_metrics_df.to_string(index=False)}")
+        all_metrics_df = all_metrics_df.reset_index().rename(columns={"index": "Epoch"})
+        logger.info(
+            f"\nValidation set scores per epoch \n {all_metrics_df.to_string(index=False)}"
+        )
         wandb.unwatch()
         run.finish()
 
