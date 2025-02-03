@@ -32,7 +32,7 @@ class EsmEmbedding(Embedding):
         
         if ('finetune_model_path' in config) and os.path.exists(config['finetune_model_path']):
             self.model.load_state_dict(torch.load(config['finetune_model_path']))
-            logging.info(f"Using finetuned moedel. Path: {config['finetune_model_path']}")
+            logging.info(f"Using finetuned model. Path: {config['finetune_model_path']}")
 
         self.alphabet = alphabet
         self.model.contact_head = Identity()
@@ -46,6 +46,28 @@ class EsmEmbedding(Embedding):
         for param in self.model.parameters():
             param.requires_grad = False
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.target_layer_index = config.get("target_layer_index", None)
+        # Ensure the target layer index is within a valid range.
+        if self.target_layer_index is not None and not (1 <= self.target_layer_index <= len(self.model.layers)):
+            self.target_layer_index = None
+        self.hidden_states = {}
+        self.hooks = []
+        for idx, layer in enumerate(self.model.layers, start=1):
+            if self.target_layer_index is not None and idx == self.target_layer_index:
+                # Register hook only if target_layer_index is not None and matches the layer
+                self.hooks.append(layer.register_forward_hook(self._save_hidden_states))
+
+    def _save_hidden_states(self, module, input, output):
+        """Hook function to capture hidden states for the target layer."""
+        # Clear previous hidden states to store only the latest output
+        if self.hidden_states:
+            self.hidden_states.clear()
+        layer_output = output[0]  # Get the output with shape [batch_size, seq_length, embedding_dim]
+        layer_key = f"layer{self.target_layer_index}"
+        if layer_key not in self.hidden_states:
+            self.hidden_states[layer_key] = []
+        # Store the detached output
+        self.hidden_states[layer_key].append(layer_output.detach().cpu().numpy())
 
     def get_embedding(self, batch):
         data = [
@@ -89,7 +111,7 @@ class EsmEmbedding(Embedding):
             raise NotImplementedError("This type of pooling is not supported")
         return seq_repr
 
-    def store_embeddings(self, batch, out_dir):
+    def store_embeddings(self, batch, out_dir, target_layer_index):
         """Store each protein embedding in a separate file named [protein_id].pkl
 
         Save all types of poolings such that each file has a [3, emb_dim]
@@ -116,13 +138,20 @@ class EsmEmbedding(Embedding):
         cls_embeddings = self._pooling(
             "cls", esm_result, batch_tokens, self.alphabet.padding_idx
         )
-
-        for protein_id, mean_emb, cls_emb in zip(
+        mean_target_layer_embeddings = None
+        if f"layer{target_layer_index}" in self.hidden_states:
+            target_layer_embeddings = torch.tensor(self.hidden_states[f"layer{target_layer_index}"][0]).permute(1, 0, 2)
+            mean_target_layer_embeddings = self._pooling(
+                    "mean", target_layer_embeddings, batch_tokens, self.alphabet.padding_idx
+            )
+        for i, (protein_id, mean_emb, cls_emb) in enumerate(zip(
             batch_labels, mean_embeddings, cls_embeddings
-        ):
+        )):
             embeddings_dict = {
                 "mean": mean_emb.numpy(),
                 "cls": cls_emb.numpy(),
             }
+            if mean_target_layer_embeddings is not None:
+                embeddings_dict[f"mean_hidden_layer{target_layer_index}"] = mean_target_layer_embeddings[i].numpy()
             with open(f"{out_dir}/{protein_id}.pkl", "wb") as file:
                 pickle.dump(embeddings_dict, file)
