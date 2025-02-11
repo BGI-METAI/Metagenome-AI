@@ -50,6 +50,7 @@ class EsmEmbedding(Embedding):
         # Ensure the target layer index is within a valid range.
         if self.target_layer_index is not None and not (1 <= self.target_layer_index <= len(self.model.layers)):
             self.target_layer_index = None
+            logging.warning(f"Invalid target_layer_index: {self.target_layer_index}. It will be treated as None.")
         self.hidden_states = {}
         self.hooks = []
         for idx, layer in enumerate(self.model.layers, start=1):
@@ -132,26 +133,24 @@ class EsmEmbedding(Embedding):
 
         esm_result = esm_result["logits"].detach().cpu()
         mean_max_cls_embeddings = []
-        mean_embeddings = self._pooling(
-            "mean", esm_result, batch_tokens, self.alphabet.padding_idx
-        )
         cls_embeddings = self._pooling(
             "cls", esm_result, batch_tokens, self.alphabet.padding_idx
         )
-        mean_target_layer_embeddings = None
         if f"layer{target_layer_index}" in self.hidden_states:
             target_layer_embeddings = torch.tensor(self.hidden_states[f"layer{target_layer_index}"][0]).permute(1, 0, 2)
-            mean_target_layer_embeddings = self._pooling(
-                    "mean", target_layer_embeddings, batch_tokens, self.alphabet.padding_idx
+            mean_embeddings = self._pooling(
+                "mean", target_layer_embeddings, batch_tokens, self.alphabet.padding_idx
             )
-        for i, (protein_id, mean_emb, cls_emb) in enumerate(zip(
+        else:
+            mean_embeddings = self._pooling(
+                "mean", esm_result, batch_tokens, self.alphabet.padding_idx
+            )
+        for protein_id, mean_emb, cls_emb in zip(
             batch_labels, mean_embeddings, cls_embeddings
-        )):
+        ):
             embeddings_dict = {
                 "mean": mean_emb.numpy(),
                 "cls": cls_emb.numpy(),
             }
-            if mean_target_layer_embeddings is not None:
-                embeddings_dict[f"mean_hidden_layer{target_layer_index}"] = mean_target_layer_embeddings[i].numpy()
             with open(f"{out_dir}/{protein_id}.pkl", "wb") as file:
                 pickle.dump(embeddings_dict, file)

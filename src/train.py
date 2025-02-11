@@ -35,7 +35,6 @@ import torch.distributed as dist
 from dataset import TSVDataset, MaxTokensLoader
 from config import ConfigProviderFactory, choose_classifier, choose_llm
 from utils.metrics import calc_metrics
-from utils.umap_visual import plot_embeddings_umap
 
 
 def init_logger(config, timestamp):
@@ -95,33 +94,33 @@ def ddp_setup(rank, world_size):
     torch.cuda.set_device(rank)
 
 
-def store_embeddings(config, logger, target_layer_index):
+def store_embeddings(config, logger):
     world_size = torch.cuda.device_count()
     logger.info("Starts saving embeddings.")
     if "train" in config and config["train"] is not None:
         logger.info("Storing embedding from a train dataset.")
         mp.spawn(
             _store_embeddings,
-            args=(config, logger, world_size, config["train"], target_layer_index),
+            args=(config, logger, world_size, config["train"]),
             nprocs=world_size,
         )
     if "valid" in config and config["valid"] is not None:
         logger.info("Storing embedding from a validation dataset.")
         mp.spawn(
             _store_embeddings,
-            args=(config, logger, world_size, config["valid"], target_layer_index),
+            args=(config, logger, world_size, config["valid"]),
             nprocs=world_size,
         )
     if "test" in config and config["test"] is not None:
         logger.info("Storing embedding from a test dataset.")
         mp.spawn(
             _store_embeddings,
-            args=(config, logger, world_size, config["test"], target_layer_index),
+            args=(config, logger, world_size, config["test"]),
             nprocs=world_size,
         )
 
 
-def _store_embeddings(rank, config, logger, world_size, data_path, target_layer_index):
+def _store_embeddings(rank, config, logger, world_size, data_path):
     try:
         ddp_setup(rank, world_size)
         device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
@@ -153,7 +152,7 @@ def _store_embeddings(rank, config, logger, world_size, data_path, target_layer_
         for batch in dataloader:
             try:
                 with torch.no_grad():
-                    llm.store_embeddings(batch, config["emb_dir"], target_layer_index)
+                    llm.store_embeddings(batch, config["emb_dir"], config["target_layer_index"])
             except RuntimeError as e:
                 if "out of memory" in str(e):
                     logger.error(
@@ -170,26 +169,19 @@ def _store_embeddings(rank, config, logger, world_size, data_path, target_layer_
         destroy_process_group()
 
 
-def train_classifier_from_stored_single_gpu(config, logger, target_layer_index):
+def train_classifier_from_stored_single_gpu(config, logger):
     logger.info("Starts classifier training.")
 
-    llm = choose_llm(config)
-    
-    if target_layer_index is not None and not (1 <= target_layer_index <= len(llm.model.layers)):
-        logger.warning(f"Invalid target_layer_index: {target_layer_index}. It will be treated as None.")
-        target_layer_index = None
-
-    layer_str = f"mean_hidden_layer{target_layer_index}" if target_layer_index else "mean"
-    
-    train_ds = TSVDataset(config["train"], config["emb_dir"], layer_str)
-    valid_ds = TSVDataset(config["valid"], config["emb_dir"], layer_str)
-    test_ds = TSVDataset(config["test"], config["emb_dir"], layer_str)
+    train_ds = TSVDataset(config["train"], config["emb_dir"], "mean")
+    valid_ds = TSVDataset(config["valid"], config["emb_dir"], "mean")
+    test_ds = TSVDataset(config["test"], config["emb_dir"], "mean")
 
     test_dataloader = data.DataLoader(
         test_ds,
         batch_size=config["batch_size"],
     )
 
+    llm = choose_llm(config)
     d_model = llm.get_embedding_dim()
     num_labels = train_ds.get_number_of_labels()
     classifier = choose_classifier(config, input_dimensions=d_model, output_dimensions=num_labels)
@@ -281,8 +273,6 @@ if __name__ == "__main__":
     logger = init_logger(config, timestamp)
     logger.info(json.dumps(config, indent=4))
 
-    target_layer_index = config.get("target_layer_index", None)
-
     # TODO :add finetuning before everything
 
     valid_modes = ["ONLY_STORE_EMBEDDINGS", "TRAIN_PREDICT_FROM_STORED", "RUN_ALL"]
@@ -296,12 +286,10 @@ if __name__ == "__main__":
 
     if config["program_mode"] == valid_modes[0]:  # ONLY_STORE_EMBEDDINGS
         # mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
-        store_embeddings(config, logger, target_layer_index)
+        store_embeddings(config, logger)
     elif config["program_mode"] == valid_modes[1]:  # TRAIN_PREDICT_FROM_STORED
-        train_classifier_from_stored_single_gpu(config, target_layer_index)
+        train_classifier_from_stored_single_gpu(config)
     elif config["program_mode"] == valid_modes[2]:  # RUN_ALL
         # mp.spawn(store_embeddings, args=(config, world_size), nprocs=world_size)
-        store_embeddings(config, logger, target_layer_index)
-        train_classifier_from_stored_single_gpu(config, logger, target_layer_index)
-    
-    #plot_embeddings_umap(config)
+        store_embeddings(config, logger)
+        train_classifier_from_stored_single_gpu(config, logger)

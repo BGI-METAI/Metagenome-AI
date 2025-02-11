@@ -34,7 +34,6 @@ The framework for labeling and classification of protein sequences based on Larg
 | `classifier_path`     | Path to a pre-trained classifier checkpoint. If provided, training will be skipped.                                                                                                                        | No       | `None`           |
 | `log_dir`             | Directory for saving log files.                                                                                                                                                                            | No       | `./logs/`        |
 | `pred_dir`            | Directory for saving predictions of the final model.                                                                                                                                                       | No       | `./predictions/` |
-| `umap_num_samples`    | The number of random samples to select for UMAP visualization. If not provided, UMAP visualization will be skipped.                                                                                        | No       | `None`           |
 | `target_layer_index`  | The index of the hidden layer from which to extract embeddings. If not provided, the model uses the mean of all layers.                                                                                     | No       | `None`           |
 
 ### Notes:
